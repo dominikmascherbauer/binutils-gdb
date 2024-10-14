@@ -3691,9 +3691,9 @@ lookup_signatured_type (struct dwarf2_cu *cu, ULONGEST sig, struct dwarf2_per_ob
       /* We're in a DWO/DWP file, and we're using .gdb_index.
 	 These cases require special processing.  */
       if (get_dwp_file (*per_objfile) == NULL)
-	return lookup_dwo_signatured_type (cu, sig);
+	sig_type = lookup_dwo_signatured_type (cu, sig);
       else
-	return lookup_dwp_signatured_type (cu, sig);
+	sig_type = lookup_dwp_signatured_type (cu, sig);
     }
   else
     {
@@ -3701,24 +3701,25 @@ lookup_signatured_type (struct dwarf2_cu *cu, ULONGEST sig, struct dwarf2_per_ob
         signatured_type find_entry (sig);
         sig_type = ((struct signatured_type *) htab_find ((*per_objfile)->per_bfd->signatured_types.get (), &find_entry));
       }
-      if (type_signature_fallback && sig_type == NULL)
-      {
-        /* fallback to symfile objfile if signature was not found */
-        objfile *objfile = cu->per_objfile->objfile->pspace->symfile_object_file;
-
-        if (objfile->separate_debug_objfile != NULL)
-          objfile = objfile->separate_debug_objfile;
-
-        struct dwarf2_per_objfile *fallback_per_objfile = get_dwarf2_per_objfile (objfile);
-
-        signatured_type find_entry (sig);
-        sig_type = ((struct signatured_type *) htab_find (fallback_per_objfile->per_bfd->signatured_types.get (), &find_entry));
-
-        if (sig_type != NULL)
-        *per_objfile = fallback_per_objfile;
-      }
-      return sig_type;
     }
+
+  if (type_signature_fallback && sig_type == NULL)
+  {
+      /* fallback to symfile objfile if signature was not found */
+      objfile *objfile = cu->per_objfile->objfile->pspace->symfile_object_file;
+
+      if (objfile->separate_debug_objfile != NULL)
+      objfile = objfile->separate_debug_objfile;
+
+      struct dwarf2_per_objfile *fallback_per_objfile = get_dwarf2_per_objfile (objfile);
+
+      signatured_type find_entry (sig);
+      sig_type = ((struct signatured_type *) htab_find (fallback_per_objfile->per_bfd->signatured_types.get (), &find_entry));
+
+      if (sig_type != NULL)
+      *per_objfile = fallback_per_objfile;
+  }
+  return sig_type;
 }
 
 /* Low level DIE reading support.  */
