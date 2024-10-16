@@ -81,6 +81,13 @@ maintenance info blocks [ADDRESS]
   are listed starting at the inner global block out to the most inner
   block.
 
+maintenance set dwarf type-signature-fallback (off|main|full)
+  New command which enables a type signature lookup fallback, if a
+  dwarf objfile from a JIT compilation does not provide its own type
+  units, but relies on type units from other objfiles.  The 'main'
+  setting allows to limit the scope of the lookup to just the main
+  symfile objfile, 'full' uses all objfiles in a progspace.
+
 * Changed commands
 
 remove-symbol-file
