@@ -662,7 +662,8 @@ jit_object_close_impl (struct gdb_symbol_callbacks *cb,
 			       priv_data->entry.symfile_addr));
 
   objfile *objfile = objfile::make (nullptr, current_program_space,
-				    objfile_name.c_str (), OBJF_NOT_FILENAME);
+				     objfile_name.c_str (),
+				     OBJF_NOT_FILENAME | OBJF_JIT);
   objfile->per_bfd->gdbarch = priv_data->gdbarch;
 
   for (gdb_symtab &symtab : obj->symtabs)
