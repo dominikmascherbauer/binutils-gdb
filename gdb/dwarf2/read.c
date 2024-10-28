@@ -5627,9 +5627,11 @@ maybe_queue_comp_unit (struct dwarf2_cu *dependent_cu,
   if (!per_objfile->symtab_set_p (per_cu))
     {
       if (dependent_cu != NULL && !per_objfile->queue.has_value () &&
-	  use_type_signature_fallback (dependent_cu->per_objfile->objfile))
+	  type_signature_fallback != type_signature_fallback_off)
 	{
-	  /* We might not have a queue in a fallback objfile */
+	  /* If the signatured type in the fallback objfile references another
+	     signatured type we might end up here with no queue in the fallback
+	     objfile  */
 	  dw2_instantiate_symtab (per_cu, per_objfile, false);
 	}
       else
@@ -21175,6 +21177,17 @@ get_signatured_type (struct die_info *die, ULONGEST signature,
       type = build_error_marker_type (cu, die);
     }
 
+  if (type_signature_fallback != type_signature_fallback_off)
+    {
+      /* We might already have read the required signatured type
+         after looking for it in a fallback objfile  */
+      struct type *existing_type = per_objfile->get_type_for_signatured_type (sig_type);
+      if (existing_type != nullptr)
+	{
+	  gdb_assert(type == existing_type);
+	  return type;
+	}
+    }
   per_objfile->set_type_for_signatured_type (sig_type, type);
 
   return type;
