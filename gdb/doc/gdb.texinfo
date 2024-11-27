@@ -42151,10 +42151,10 @@ For more information on these expressions, see
 @item maint set dwarf type-signature-fallback @samp{full|main|off}
 @itemx maint show dwarf type-signature-fallback
 Control the behavior of the type signature lookup for type units if a
-type signature is not found registered within an objfile.
+type signature is undefined within an objfile.
 
 The default is @code{off}, which means @value{GDBN} will not use other
-objfiles in the progspace to lookup a missing type signature. When
+objfiles in the progspace to lookup missing type signatures. When
 @code{main}, @value{GDBN} will check the current main objfile for a
 missing signatured type. When @code{full}, all objfiles in the current
 progspace will be searched for the missing signatured type.
@@ -42165,8 +42165,8 @@ progspace will be searched for the missing signatured type.
 @itemx maint show dwarf type-signature-fallback-jit
 
 Control whether @code{dwarf type-signature-fallback} is limited to
-objfiles originated from the JIT interface (@pxref{JIT interface}) or all objfiles with a
-missing signatured type.
+objfiles originated from the JIT interface (@pxref{JIT Interface})
+or all objfiles with a missing signatured type.
 
 The default is @code{on}, which limits the type signature fallback to
 only objfiles from the JIT interface. When @code{off}, the type signature

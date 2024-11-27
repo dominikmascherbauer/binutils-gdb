@@ -757,7 +757,7 @@ show_type_signature_fallback (struct ui_file *file, int from_tty,
 			      struct cmd_list_element *c, const char *value)
 {
   gdb_printf (file, _ ("Resolution of type signatures with "
-		       "fallback objfiles (if set before loading symbols) is %s.\n"),
+		       "fallback objfiles is %s.\n"),
 	      value);
 }
 
@@ -3724,23 +3724,33 @@ process_dwo_file_for_fallback_signatured_type (void **slot, void *info)
   struct fallback_data *data = (fallback_data *) info;
   struct dwo_unit find_dwo_entry, *dwo_entry;
 
+  /* Does the DWO file contain any type units?  */
   if (dwo_file->tus == NULL)
-    return 1;
+    {
+      /* Continue traversal of dwo files */
+      return 1;
+    }
   find_dwo_entry.signature = data->sig;
   dwo_entry = (struct dwo_unit *) htab_find (dwo_file->tus.get (),
 					     &find_dwo_entry);
+  /* Have we found the signatured dwo entry?  */
   if (dwo_entry == NULL)
-    return 1;
+    {
+      /* Continue traversal of dwo files */
+      return 1;
+    }
 
-  /* Stop traversal of dwo files */
+  /* Write found DWO entry into fallback data result.  */
   *(data->dwo_entry) = dwo_entry;
+  /* Stop traversal of dwo files */
   return 0;
 }
 
 
 /* Subroutine of lookup_signatured_type.
    Look up the type for signature SIG, from a fallback objfile.
-   If we can't find SIG in the fallback object file, check for dwo/dwp files. */
+   If we can't find SIG in the fallback object file, check for dwo/dwp files.
+   If a signatured type was found, PER_OBJFILE will contain its per_objfile.  */
 
 static struct signatured_type *
 lookup_fallback_signatured_type (struct objfile *fallback_objfile, ULONGEST sig,
@@ -3748,12 +3758,14 @@ lookup_fallback_signatured_type (struct objfile *fallback_objfile, ULONGEST sig,
 {
   struct signatured_type *sig_type = NULL;
 
+  /* If we have a separate debug objfile, use it for the fallback.  */
   if (fallback_objfile->separate_debug_objfile != NULL)
     fallback_objfile = fallback_objfile->separate_debug_objfile;
 
   struct dwarf2_per_objfile *fallback_per_objfile = get_dwarf2_per_objfile (
 	  fallback_objfile);
 
+  /* First check direct fallback per_objfile for signatured type.  */
   if (fallback_per_objfile->per_bfd->signatured_types != NULL)
     {
       signatured_type find_entry (sig);
@@ -3762,20 +3774,27 @@ lookup_fallback_signatured_type (struct objfile *fallback_objfile, ULONGEST sig,
 	      &find_entry));
     }
 
+  /* If we did not find the signatured type, check if the fallback objfile is a dwo/dwp file and search there.  */
   if (sig_type == NULL)
     {
+      /* Look for dwo_entry that contains the signatured type.  */
       struct dwo_unit *dwo_entry = NULL;
+      /* Do we have dwo files?  */
       if (fallback_per_objfile->per_bfd->dwo_files != NULL)
 	{
 	  fallback_data data{sig, &dwo_entry};
+	  /* after traverse is completed dwo_entry is set if found (via data in process_dwo_file_for_fallback_signatured_type).  */
 	  htab_traverse_noresize (
 		  fallback_per_objfile->per_bfd->dwo_files.get (),
 		  process_dwo_file_for_fallback_signatured_type,
 		  &data);
 	}
+	/* Do we have a dwp file?  */
       else if (get_dwp_file (fallback_per_objfile) != NULL)
 	{
 	  struct dwp_file *dwp_file = get_dwp_file (fallback_per_objfile);
+	  /* Does the dwp file have any type units.
+	     Look for the signature within the type units.  */
 	  if (dwp_file->tus != NULL)
 	    {
 	      dwo_entry = lookup_dwo_unit_in_dwp (fallback_per_objfile,
@@ -3785,14 +3804,20 @@ lookup_fallback_signatured_type (struct objfile *fallback_objfile, ULONGEST sig,
 	    }
 	}
 
+      /* Have we found a dwo_entry for the signature?
+         Add it to the signatured types of the fallback objfile.  */
       if (dwo_entry != NULL)
 	{
+	  /* If TU skeletons have been removed then we may not have read in any
+	     TUs yet.  */
 	  if (fallback_per_objfile->per_bfd->signatured_types == NULL)
 	    {
 	      fallback_per_objfile->per_bfd->signatured_types
 		      = allocate_signatured_type_table ();
 	    }
 
+	  /* The signatured type does not exist in the fallback objectfile.
+	     Create and write result into SIG_TYPE.  */
 	  sig_type = add_type_unit (fallback_per_objfile, sig, NULL);
 	  fill_in_sig_entry_from_dwo_entry (fallback_per_objfile, sig_type,
 					    dwo_entry);
@@ -3801,6 +3826,7 @@ lookup_fallback_signatured_type (struct objfile *fallback_objfile, ULONGEST sig,
     }
 
   if (sig_type != NULL)
+    /* Ensure we will know where the signature type came from.  */
     *per_objfile = fallback_per_objfile;
   return sig_type;
 }
@@ -3834,28 +3860,37 @@ lookup_signatured_type (struct dwarf2_cu *cu, ULONGEST sig, struct dwarf2_per_ob
 	      &find_entry));
     }
 
-  if (use_type_signature_fallback((*per_objfile)->objfile) && sig_type == NULL)
+  /* If we already found the signatured type, return it.  */
+  if (sig_type != NULL)
     {
+      return sig_type;
+    }
+
+  /* Handle fallback if type signature lookup fallback is enabled for this objfile.  */
+  if (use_type_signature_fallback ((*per_objfile)->objfile))
+    {
+      /* Do a full fallback through all objfiles in the progspace.  */
       if (type_signature_fallback == type_signature_fallback_full)
 	{
-	  for (objfile *obj: cu->per_objfile->objfile->pspace ()->objfiles ())
+	  for (objfile *objfile: cu->per_objfile->objfile->pspace ()->objfiles ())
 	    {
-	      sig_type = lookup_fallback_signatured_type (obj, sig,
+	      sig_type = lookup_fallback_signatured_type (objfile, sig,
 							  per_objfile);
+	      /* If we already found the signatured type, return it.  */
 	      if (sig_type != NULL)
-		break;
+		return sig_type;
 	    }
 	}
       else
 	{
-	  // fallback to main symfile objfile
+	  /* fallback to main symfile objfile.  */
 	  struct objfile *objfile = cu->per_objfile->objfile->pspace ()->symfile_object_file;
-	  sig_type = lookup_fallback_signatured_type (objfile, sig,
-						      per_objfile);
+	  return lookup_fallback_signatured_type (objfile, sig, per_objfile);
 	}
     }
 
-  return sig_type;
+  /* We could not find the signatured type.  */
+  return NULL;
 }
 
 /* Low level DIE reading support.  */
@@ -5631,7 +5666,7 @@ maybe_queue_comp_unit (struct dwarf2_cu *dependent_cu,
 	{
 	  /* If the signatured type in the fallback objfile references another
 	     signatured type we might end up here with no queue in the fallback
-	     objfile  */
+	     objfile.  */
 	  dw2_instantiate_symtab (per_cu, per_objfile, false);
 	}
       else
@@ -22295,10 +22330,9 @@ caching, which can slow down startup."),
   add_setshow_enum_cmd ("type-signature-fallback", no_class,
 			type_signature_fallback_enums, &type_signature_fallback,
 			_ ("\
-Set resolution of type signatures with other objfiles as fallback\n\
-(if set before loading symbols)."), _ ("\
-Show resolution of type signatures with other objfiles as fallback\n\
-(if set before loading symbols)."), _ ("\
+Set resolution of type signatures with other objfiles as fallback."), _ ("\
+Show resolution of type signatures with other objfiles as fallback."), _ ("\
+This option will only take effect if set before loading symbols.\n\
 off  == turn type signature fallback off\n\
 main == use the main symbolfile as fallback objfile\n\
 	for type signature resolution\n\

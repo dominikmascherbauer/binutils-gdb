@@ -87,6 +87,7 @@ maintenance set dwarf type-signature-fallback (off|main|full)
   units, but relies on type units from other objfiles.  The 'main'
   setting allows to limit the scope of the lookup to just the main
   symfile objfile, 'full' uses all objfiles in a progspace.
+  The default value is 'off'.
 
 maintenance set dwarf type-signature-fallback-jit on|off
   New command that is used in combination with type-signature-fallback
