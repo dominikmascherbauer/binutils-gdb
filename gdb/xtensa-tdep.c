@@ -1496,17 +1496,16 @@ xtensa_frame_prev_register (const frame_info_ptr &this_frame,
 }
 
 
-static const struct frame_unwind
-xtensa_unwind =
-{
+static const struct frame_unwind_legacy xtensa_unwind (
   "xtensa prologue",
   NORMAL_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   xtensa_frame_this_id,
   xtensa_frame_prev_register,
   NULL,
   default_frame_sniffer
-};
+);
 
 static CORE_ADDR
 xtensa_frame_base_address (const frame_info_ptr &this_frame, void **this_cache)
@@ -3266,7 +3265,7 @@ _initialize_xtensa_tdep ()
 			     &xtensa_debug_level,
 			    _("Set Xtensa debugging."),
 			    _("Show Xtensa debugging."), _("\
-When non-zero, Xtensa-specific debugging is enabled. \
+When non-zero, Xtensa-specific debugging is enabled.\n\
 Can be 1, 2, 3, or 4 indicating the level of debugging."),
 			     NULL,
 			     NULL,

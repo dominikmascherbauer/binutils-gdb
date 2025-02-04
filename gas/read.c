@@ -1,5 +1,5 @@
 /* read.c - read a source file -
-   Copyright (C) 1986-2024 Free Software Foundation, Inc.
+   Copyright (C) 1986-2025 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -76,6 +76,12 @@ bool input_from_string = false;
 die horribly;
 #endif
 
+#ifndef CR_EOL
+#define LEX_CR LEX_WHITE
+#else
+#define LEX_CR 0
+#endif
+
 #ifndef LEX_AT
 #define LEX_AT 0
 #endif
@@ -112,9 +118,9 @@ die horribly;
 
 /* Used by is_... macros. our ctype[].  */
 char lex_type[256] = {
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	/* @ABCDEFGHIJKLMNO */
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, LEX_CR, 0, 0,	/* @ABCDEFGHIJKLMNO */
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,	/* PQRSTUVWXYZ[\]^_ */
-  0, 0, 0, LEX_HASH, LEX_DOLLAR, LEX_PCT, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, /* _!"#$%&'()*+,-./ */
+  8, 0, 0, LEX_HASH, LEX_DOLLAR, LEX_PCT, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, /* _!"#$%&'()*+,-./ */
   1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, LEX_QM,	/* 0123456789:;<=>? */
   LEX_AT, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,	/* @ABCDEFGHIJKLMNO */
   3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, LEX_BR, 0, LEX_BR, 0, 3, /* PQRSTUVWXYZ[\]^_ */
@@ -265,6 +271,9 @@ static void poend (void);
 static size_t get_macro_line_sb (sb *);
 static void generate_file_debug (void);
 static char *_find_end_of_line (char *, int, int, int);
+#if defined (TE_PE) && defined (O_secrel)
+static void s_cv_comp (int sign);
+#endif
 
 void
 read_begin (void)
@@ -327,6 +336,7 @@ read_end (void)
   _obstack_free (&cond_obstack, NULL);
   free (current_name);
   free (current_label);
+  free (include_dirs);
 }
 
 #ifndef TC_ADDRESS_BYTES
@@ -369,6 +379,10 @@ static const pseudo_typeS potable[] = {
   {"comm", s_comm, 0},
   {"common", s_mri_common, 0},
   {"common.s", s_mri_common, 1},
+#if defined (TE_PE) && defined (O_secrel)
+  {"cv_scomp", s_cv_comp, 1},
+  {"cv_ucomp", s_cv_comp, 0},
+#endif
   {"data", s_data, 0},
   {"dc", cons, 2},
   {"dc.a", cons, 0},
@@ -1060,11 +1074,11 @@ read_a_source_file (const char *name)
 
 			  if (*rest == ':')
 			    ++rest;
-			  if (*rest == ' ' || *rest == '\t')
+			  if (is_whitespace (*rest))
 			    ++rest;
 			  if ((strncasecmp (rest, "EQU", 3) == 0
 			       || strncasecmp (rest, "SET", 3) == 0)
-			      && (rest[3] == ' ' || rest[3] == '\t'))
+			      && is_whitespace (rest[3]))
 			    {
 			      input_line_pointer = rest + 3;
 			      equals (line_start,
@@ -1072,8 +1086,7 @@ read_a_source_file (const char *name)
 			      continue;
 			    }
 			  if (strncasecmp (rest, "MACRO", 5) == 0
-			      && (rest[5] == ' '
-				  || rest[5] == '\t'
+			      && (is_whitespace (rest[5])
 				  || is_end_of_line[(unsigned char) rest[5]]))
 			    mri_line_macro = 1;
 			}
@@ -1109,7 +1122,7 @@ read_a_source_file (const char *name)
 	     level.  */
 	  do
 	    nul_char = next_char = *input_line_pointer++;
-	  while (next_char == '\t' || next_char == ' ' || next_char == '\f');
+	  while (is_whitespace (next_char) || next_char == '\f');
 
 	  /* C is the 1st significant character.
 	     Input_line_pointer points after that character.  */
@@ -1138,12 +1151,12 @@ read_a_source_file (const char *name)
 		      if (*rest == ':')
 			++rest;
 
-		      if (*rest == ' ' || *rest == '\t')
+		      if (is_whitespace (*rest))
 			++rest;
 
 		      if ((strncasecmp (rest, "EQU", 3) == 0
 			   || strncasecmp (rest, "SET", 3) == 0)
-			  && (rest[3] == ' ' || rest[3] == '\t'))
+			  && is_whitespace (rest[3]))
 			{
 			  input_line_pointer = rest + 3;
 			  equals (s, 1);
@@ -1161,7 +1174,7 @@ read_a_source_file (const char *name)
 		  SKIP_WHITESPACE ();
 		}
 	      else if ((next_char == '=' && *rest == '=')
-		       || ((next_char == ' ' || next_char == '\t')
+		       || (is_whitespace (next_char)
 			   && rest[0] == '='
 			   && rest[1] == '='))
 		{
@@ -1169,7 +1182,7 @@ read_a_source_file (const char *name)
 		  demand_empty_rest_of_line ();
 		}
 	      else if ((next_char == '='
-		       || ((next_char == ' ' || next_char == '\t')
+		       || (is_whitespace (next_char)
 			    && *rest == '='))
 #ifdef TC_EQUAL_IN_INSN
 			   && !TC_EQUAL_IN_INSN (next_char, s)
@@ -1276,7 +1289,7 @@ read_a_source_file (const char *name)
 		      /* The following skip of whitespace is compulsory.
 			 A well shaped space is sometimes all that separates
 			 keyword from operands.  */
-		      if (next_char == ' ' || next_char == '\t')
+		      if (is_whitespace (next_char))
 			input_line_pointer++;
 
 		      /* Input_line is restored.
@@ -1489,7 +1502,7 @@ mri_comment_field (char *stopcp)
   know (flag_m68k_mri);
 
   for (s = input_line_pointer;
-       ((!is_end_of_line[(unsigned char) *s] && *s != ' ' && *s != '\t')
+       ((!is_end_of_line[(unsigned char) *s] && !is_whitespace (*s))
 	|| inquote);
        s++)
     {
@@ -3090,8 +3103,8 @@ s_purgem (int ignore ATTRIBUTE_UNUSED)
       SKIP_WHITESPACE ();
       c = get_symbol_name (& name);
       delete_macro (name);
-      *input_line_pointer = c;
-      SKIP_WHITESPACE_AFTER_NAME ();
+      restore_line_pointer (c);
+      SKIP_WHITESPACE ();
     }
   while (*input_line_pointer++ == ',');
 
@@ -3136,9 +3149,9 @@ do_repeat (size_t count, const char *start, const char *end,
   sb one;
   sb many;
 
-  if (((ssize_t) count) < 0)
+  if (count > 0x7fffffff)
     {
-      as_bad (_("negative count for %s - ignored"), start);
+      as_bad (_("excessive count %zu for %s - ignored"), count, start);
       count = 0;
     }
 
@@ -3290,9 +3303,8 @@ assign_symbol (char *name, int mode)
 	  symbol_set_frag (symbolP, dummy_frag);
 	}
 #endif
-#if defined (OBJ_COFF) && !defined (TE_PE)
-      /* "set" symbols are local unless otherwise specified.  */
-      SF_SET_LOCAL (symbolP);
+#ifdef obj_assign_symbol
+      obj_assign_symbol (symbolP);
 #endif
     }
 
@@ -3605,8 +3617,7 @@ s_nop (int ignore ATTRIBUTE_UNUSED)
 #endif
       /* md_assemble might modify its argument, so
 	 we must pass it a string that is writable.  */
-      if (asprintf (&nop, "%s", md_single_noop_insn) < 0)
-	as_fatal ("%s", xstrerror (errno));
+      nop = xasprintf ("%s", md_single_noop_insn);
 
       /* Some targets assume that they can update input_line_pointer
 	 inside md_assemble, and, worse, that they can leave it
@@ -4063,7 +4074,7 @@ pseudo_set (symbolS *symbolP)
   if (!S_IS_FORWARD_REF (symbolP))
     (void) expression (&exp);
   else
-    (void) deferred_expression (&exp);
+    (void) expr (0, &exp, expr_defer_incl_dot);
 
   if (exp.X_op == O_illegal)
     as_bad (_("illegal expression"));
@@ -4345,7 +4356,7 @@ s_reloc (int ignore ATTRIBUTE_UNUSED)
     { "64", BFD_RELOC_64 }
   };
 
-  reloc = XNEW (struct reloc_list);
+  reloc = notes_alloc (sizeof (*reloc));
 
   if (flag_mri)
     stop = mri_comment_field (&stopc);
@@ -4402,7 +4413,7 @@ s_reloc (int ignore ATTRIBUTE_UNUSED)
     }
   else
     reloc->u.a.howto = bfd_reloc_name_lookup (stdoutput, r_name);
-  *input_line_pointer = c;
+  restore_line_pointer (c);
   if (reloc->u.a.howto == NULL)
     {
       as_bad (_("unrecognized reloc type"));
@@ -4410,7 +4421,7 @@ s_reloc (int ignore ATTRIBUTE_UNUSED)
     }
 
   exp.X_op = O_absent;
-  SKIP_WHITESPACE_AFTER_NAME ();
+  SKIP_WHITESPACE ();
   if (*input_line_pointer == ',')
     {
       ++input_line_pointer;
@@ -4424,7 +4435,6 @@ s_reloc (int ignore ATTRIBUTE_UNUSED)
       as_bad (_("bad reloc expression"));
     err_out:
       ignore_rest_of_line ();
-      free (reloc);
       if (flag_mri)
 	mri_comment_end (stop, stopc);
       return;
@@ -4478,8 +4488,7 @@ emit_expr_with_reloc (expressionS *exp,
     return;
 
   frag_grow (nbytes);
-  dot_value = frag_now_fix ();
-  dot_frag = frag_now;
+  symbol_set_value_now (&dot_symbol);
 
 #ifndef NO_LISTING
 #ifdef OBJ_ELF
@@ -5459,6 +5468,97 @@ s_leb128 (int sign)
   demand_empty_rest_of_line ();
 }
 
+#if defined (TE_PE) && defined (O_secrel)
+
+/* Generate the appropriate fragments for a given expression to emit a
+   cv_comp value.  SIGN is 1 for cv_scomp, 0 for cv_ucomp.  */
+
+static void
+emit_cv_comp_expr (expressionS *exp, int sign)
+{
+  operatorT op = exp->X_op;
+
+  if (op == O_absent || op == O_illegal)
+    {
+      as_warn (_("zero assumed for missing expression"));
+      exp->X_add_number = 0;
+      op = O_constant;
+    }
+  else if (op == O_big)
+    {
+      as_bad (_("number invalid"));
+      exp->X_add_number = 0;
+      op = O_constant;
+    }
+  else if (op == O_register)
+    {
+      as_warn (_("register value used as expression"));
+      op = O_constant;
+    }
+
+  if (now_seg == absolute_section)
+    {
+      if (op != O_constant || exp->X_add_number != 0)
+	as_bad (_("attempt to store value in absolute section"));
+      abs_section_offset++;
+      return;
+    }
+
+  if ((op != O_constant || exp->X_add_number != 0) && in_bss ())
+    as_bad (_("attempt to store non-zero value in section `%s'"),
+	    segment_name (now_seg));
+
+  /* Let the backend know that subsequent data may be byte aligned.  */
+#ifdef md_cons_align
+  md_cons_align (1);
+#endif
+
+  if (op == O_constant)
+    {
+      offsetT value = exp->X_add_number;
+      unsigned int size;
+      char *p;
+
+      /* If we've got a constant, emit the thing directly right now.  */
+
+      size = sizeof_cv_comp (value, sign);
+      p = frag_more (size);
+      if (output_cv_comp (p, value, sign) > size)
+	abort ();
+    }
+  else
+    {
+      /* Otherwise, we have to create a variable sized fragment and
+	 resolve things later.  */
+
+      frag_var (rs_cv_comp, 4, 0, sign, make_expr_symbol (exp), 0, NULL);
+    }
+}
+
+/* Parse the .cv_ucomp and .cv_scomp pseudos.  */
+
+static void
+s_cv_comp (int sign)
+{
+  expressionS exp;
+
+#ifdef md_flush_pending_output
+  md_flush_pending_output ();
+#endif
+
+  do
+    {
+      expression (&exp);
+      emit_cv_comp_expr (&exp, sign);
+    }
+  while (*input_line_pointer++ == ',');
+
+  input_line_pointer--;
+  demand_empty_rest_of_line ();
+}
+
+#endif /* TE_PE && O_secrel */
+
 /* Code for handling base64 encoded strings.
    Based upon code in sharutils' lib/base64.c source file, written by
    Simon Josefsson.  Which was partially adapted from GNU MailUtils
@@ -6226,7 +6326,7 @@ equals (char *sym_name, int reassign)
   if (reassign < 0 && *input_line_pointer == '=')
     input_line_pointer++;
 
-  while (*input_line_pointer == ' ' || *input_line_pointer == '\t')
+  while (is_whitespace (*input_line_pointer))
     input_line_pointer++;
 
   if (flag_mri)
@@ -6400,8 +6500,7 @@ s_include (int arg ATTRIBUTE_UNUSED)
       SKIP_WHITESPACE ();
       i = 0;
       while (!is_end_of_line[(unsigned char) *input_line_pointer]
-	     && *input_line_pointer != ' '
-	     && *input_line_pointer != '\t')
+	     && !is_whitespace (*input_line_pointer))
 	{
 	  obstack_1grow (&notes, *input_line_pointer);
 	  ++input_line_pointer;
@@ -6529,25 +6628,19 @@ do_s_func (int end_p, const char *default_prefix)
 
       delim1 = get_symbol_name (& name);
       name = xstrdup (name);
-      *input_line_pointer = delim1;
-      SKIP_WHITESPACE_AFTER_NAME ();
+      restore_line_pointer (delim1);
+      SKIP_WHITESPACE ();
       if (*input_line_pointer != ',')
 	{
 	  if (default_prefix)
-	    {
-	      if (asprintf (&label, "%s%s", default_prefix, name) == -1)
-		as_fatal ("%s", xstrerror (errno));
-	    }
+	    label = xasprintf ("%s%s", default_prefix, name);
 	  else
 	    {
 	      char leading_char = bfd_get_symbol_leading_char (stdoutput);
 	      /* Missing entry point, use function's name with the leading
 		 char prepended.  */
 	      if (leading_char)
-		{
-		  if (asprintf (&label, "%c%s", leading_char, name) == -1)
-		    as_fatal ("%s", xstrerror (errno));
-		}
+		label = xasprintf ("%c%s", leading_char, name);
 	      else
 		label = xstrdup (name);
 	    }

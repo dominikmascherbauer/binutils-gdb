@@ -558,7 +558,7 @@ mips_xfer_register (struct gdbarch *gdbarch, struct regcache *regcache,
 }
 
 /* Determine if a MIPS3 or later cpu is operating in MIPS{1,2} FPU
-   compatiblity mode.  A return value of 1 means that we have
+   compatibility mode.  A return value of 1 means that we have
    physical 64-bit registers, but should treat them as 32-bit registers.  */
 
 static int
@@ -574,7 +574,7 @@ mips2_fp_compat (const frame_info_ptr &frame)
   /* FIXME drow 2002-03-10: This is disabled until we can do it consistently,
      in all the places we deal with FP registers.  PR gdb/413.  */
   /* Otherwise check the FR bit in the status register - it controls
-     the FP compatiblity mode.  If it is clear we are in compatibility
+     the FP compatibility mode.  If it is clear we are in compatibility
      mode.  */
   if ((get_frame_register_unsigned (frame, MIPS_PS_REGNUM) & ST0_FR) == 0)
     return 1;
@@ -592,7 +592,7 @@ static CORE_ADDR heuristic_proc_start (struct gdbarch *, CORE_ADDR);
 static struct cmd_list_element *setmipscmdlist = NULL;
 static struct cmd_list_element *showmipscmdlist = NULL;
 
-/* Integer registers 0 thru 31 are handled explicitly by
+/* Integer registers 0 through 31 are handled explicitly by
    mips_register_name().  Processor specific registers 32 and above
    are listed in the following tables.  */
 
@@ -920,7 +920,7 @@ mips_convert_register_float_case_p (struct gdbarch *gdbarch, int regnum,
 }
 
 /* This predicate tests for the case of a value of less than 8
-   bytes in width that is being transfered to or from an 8 byte
+   bytes in width that is being transferred to or from an 8 byte
    general purpose register.  */
 static int
 mips_convert_register_gpreg_case_p (struct gdbarch *gdbarch, int regnum,
@@ -951,14 +951,17 @@ mips_register_to_value (const frame_info_ptr &frame, int regnum,
 
   if (mips_convert_register_float_case_p (gdbarch, regnum, type))
     {
-      get_frame_register (frame, regnum + 0, to + 4);
-      get_frame_register (frame, regnum + 1, to + 0);
+      gdb::array_view<gdb_byte> first_half = gdb::make_array_view (to, 4);
+      gdb::array_view<gdb_byte> second_half = gdb::make_array_view (to + 4, 4);
 
-      if (!get_frame_register_bytes (next_frame, regnum + 0, 0, { to + 4, 4 },
+      get_frame_register (frame, regnum + 0, second_half);
+      get_frame_register (frame, regnum + 1, first_half);
+
+      if (!get_frame_register_bytes (next_frame, regnum + 0, 0, second_half,
 				     optimizedp, unavailablep))
 	return 0;
 
-      if (!get_frame_register_bytes (next_frame, regnum + 1, 0, { to + 0, 4 },
+      if (!get_frame_register_bytes (next_frame, regnum + 1, 0, first_half,
 				     optimizedp, unavailablep))
 	return 0;
       *optimizedp = *unavailablep = 0;
@@ -1076,7 +1079,7 @@ mips_register_type (struct gdbarch *gdbarch, int regnum)
 	return builtin_type (gdbarch)->builtin_int32;
       else if (tdep->mips64_transfers_32bit_regs_p)
 	/* The target, while possibly using a 64-bit register buffer,
-	   is only transfering 32-bits of each integer register.
+	   is only transferring 32-bits of each integer register.
 	   Reflect this in the cooked/pseudo (ABI) register value.  */
 	return builtin_type (gdbarch)->builtin_int32;
       else if (mips_abi_regsize (gdbarch) == 4)
@@ -2877,7 +2880,7 @@ mips_insn16_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
     find_pc_partial_function (pc, NULL, &start_addr, NULL);
     if (start_addr == 0)
       start_addr = heuristic_proc_start (gdbarch, pc);
-    /* We can't analyze the prologue if we couldn't find the begining
+    /* We can't analyze the prologue if we couldn't find the beginning
        of the function.  */
     if (start_addr == 0)
       return cache;
@@ -2925,16 +2928,16 @@ mips_insn16_frame_sniffer (const struct frame_unwind *self,
   return 0;
 }
 
-static const struct frame_unwind mips_insn16_frame_unwind =
-{
+static const struct frame_unwind_legacy mips_insn16_frame_unwind (
   "mips insn16 prologue",
   NORMAL_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   mips_insn16_frame_this_id,
   mips_insn16_frame_prev_register,
   NULL,
   mips_insn16_frame_sniffer
-};
+);
 
 static CORE_ADDR
 mips_insn16_frame_base_address (const frame_info_ptr &this_frame,
@@ -3312,7 +3315,7 @@ mips_micro_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
     find_pc_partial_function (pc, NULL, &start_addr, NULL);
     if (start_addr == 0)
       start_addr = heuristic_proc_start (get_frame_arch (this_frame), pc);
-    /* We can't analyze the prologue if we couldn't find the begining
+    /* We can't analyze the prologue if we couldn't find the beginning
        of the function.  */
     if (start_addr == 0)
       return cache;
@@ -3361,16 +3364,16 @@ mips_micro_frame_sniffer (const struct frame_unwind *self,
   return 0;
 }
 
-static const struct frame_unwind mips_micro_frame_unwind =
-{
+static const struct frame_unwind_legacy mips_micro_frame_unwind (
   "mips micro prologue",
   NORMAL_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   mips_micro_frame_this_id,
   mips_micro_frame_prev_register,
   NULL,
   mips_micro_frame_sniffer
-};
+);
 
 static CORE_ADDR
 mips_micro_frame_base_address (const frame_info_ptr &this_frame,
@@ -3693,7 +3696,7 @@ mips_insn32_frame_cache (const frame_info_ptr &this_frame, void **this_cache)
     find_pc_partial_function (pc, NULL, &start_addr, NULL);
     if (start_addr == 0)
       start_addr = heuristic_proc_start (gdbarch, pc);
-    /* We can't analyze the prologue if we couldn't find the begining
+    /* We can't analyze the prologue if we couldn't find the beginning
        of the function.  */
     if (start_addr == 0)
       return cache;
@@ -3740,16 +3743,16 @@ mips_insn32_frame_sniffer (const struct frame_unwind *self,
   return 0;
 }
 
-static const struct frame_unwind mips_insn32_frame_unwind =
-{
+static const struct frame_unwind_legacy mips_insn32_frame_unwind (
   "mips insn32 prologue",
   NORMAL_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   mips_insn32_frame_this_id,
   mips_insn32_frame_prev_register,
   NULL,
   mips_insn32_frame_sniffer
-};
+);
 
 static CORE_ADDR
 mips_insn32_frame_base_address (const frame_info_ptr &this_frame,
@@ -3856,16 +3859,16 @@ mips_stub_frame_sniffer (const struct frame_unwind *self,
   return 0;
 }
 
-static const struct frame_unwind mips_stub_frame_unwind =
-{
+static const struct frame_unwind_legacy mips_stub_frame_unwind (
   "mips stub",
   NORMAL_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   mips_stub_frame_this_id,
   mips_stub_frame_prev_register,
   NULL,
   mips_stub_frame_sniffer
-};
+);
 
 static CORE_ADDR
 mips_stub_frame_base_address (const frame_info_ptr &this_frame,
@@ -4581,7 +4584,7 @@ mips_eabi_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
     }
 
   /* Now load as many as possible of the first arguments into
-     registers, and push the rest onto the stack.  Loop thru args
+     registers, and push the rest onto the stack.  Loop through args
      from first to last.  */
   for (argnum = 0; argnum < nargs; argnum++)
     {
@@ -4754,7 +4757,7 @@ mips_eabi_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
 		}
 
 	      /* Note!!! This is NOT an else clause.  Odd sized
-		 structs may go thru BOTH paths.  Floating point
+		 structs may go through BOTH paths.  Floating point
 		 arguments will not.  */
 	      /* Write this portion of the argument to a general
 		 purpose register.  */
@@ -4975,7 +4978,7 @@ mips_n32n64_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
     }
 
   /* Now load as many as possible of the first arguments into
-     registers, and push the rest onto the stack.  Loop thru args
+     registers, and push the rest onto the stack.  Loop through args
      from first to last.  */
   for (argnum = 0; argnum < nargs; argnum++)
     {
@@ -5106,7 +5109,7 @@ mips_n32n64_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
 		}
 
 	      /* Note!!! This is NOT an else clause.  Odd sized
-		 structs may go thru BOTH paths.  */
+		 structs may go through BOTH paths.  */
 	      /* Write this portion of the argument to a general
 		 purpose register.  */
 	      if (argreg <= mips_last_arg_regnum (gdbarch))
@@ -5455,7 +5458,7 @@ mips_o32_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
     }
 
   /* Now load as many as possible of the first arguments into
-     registers, and push the rest onto the stack.  Loop thru args
+     registers, and push the rest onto the stack.  Loop through args
      from first to last.  */
   for (argnum = 0; argnum < nargs; argnum++)
     {
@@ -5618,7 +5621,7 @@ mips_o32_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
 		}
 
 	      /* Note!!! This is NOT an else clause.  Odd sized
-		 structs may go thru BOTH paths.  */
+		 structs may go through BOTH paths.  */
 	      /* Write this portion of the argument to a general
 		 purpose register.  */
 	      if (argreg <= mips_last_arg_regnum (gdbarch))
@@ -5976,7 +5979,7 @@ mips_o64_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
     }
 
   /* Now load as many as possible of the first arguments into
-     registers, and push the rest onto the stack.  Loop thru args
+     registers, and push the rest onto the stack.  Loop through args
      from first to last.  */
   for (argnum = 0; argnum < nargs; argnum++)
     {
@@ -6080,7 +6083,7 @@ mips_o64_push_dummy_call (struct gdbarch *gdbarch, struct value *function,
 		}
 
 	      /* Note!!! This is NOT an else clause.  Odd sized
-		 structs may go thru BOTH paths.  */
+		 structs may go through BOTH paths.  */
 	      /* Write this portion of the argument to a general
 		 purpose register.  */
 	      if (argreg <= mips_last_arg_regnum (gdbarch))
@@ -6252,11 +6255,11 @@ mips_o64_return_value (struct gdbarch *gdbarch, struct value *function,
 
 static void
 mips_read_fp_register_single (const frame_info_ptr &frame, int regno,
-			      gdb_byte *rare_buffer)
+			      gdb::array_view<gdb_byte> rare_buffer)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   int raw_size = register_size (gdbarch, regno);
-  gdb_byte *raw_buffer = (gdb_byte *) alloca (raw_size);
+  gdb::byte_vector raw_buffer (raw_size);
 
   if (!deprecated_frame_register_read (frame, regno, raw_buffer))
     error (_("can't read register %d (%s)"),
@@ -6272,11 +6275,11 @@ mips_read_fp_register_single (const frame_info_ptr &frame, int regno,
       else
 	offset = 0;
 
-      memcpy (rare_buffer, raw_buffer + offset, 4);
+      memcpy (rare_buffer.data (), raw_buffer.data () + offset, 4);
     }
   else
     {
-      memcpy (rare_buffer, raw_buffer, 4);
+      memcpy (rare_buffer.data (), raw_buffer.data (), 4);
     }
 }
 
@@ -6286,7 +6289,7 @@ mips_read_fp_register_single (const frame_info_ptr &frame, int regno,
 
 static void
 mips_read_fp_register_double (const frame_info_ptr &frame, int regno,
-			      gdb_byte *rare_buffer)
+			      gdb::array_view<gdb_byte> rare_buffer)
 {
   struct gdbarch *gdbarch = get_frame_arch (frame);
   int raw_size = register_size (gdbarch, regno);
@@ -6311,13 +6314,14 @@ mips_read_fp_register_double (const frame_info_ptr &frame, int regno,
 	 each register.  */
       if (gdbarch_byte_order (gdbarch) == BFD_ENDIAN_BIG)
 	{
-	  mips_read_fp_register_single (frame, regno, rare_buffer + 4);
+	  mips_read_fp_register_single (frame, regno, rare_buffer.slice (4));
 	  mips_read_fp_register_single (frame, regno + 1, rare_buffer);
 	}
       else
 	{
 	  mips_read_fp_register_single (frame, regno, rare_buffer);
-	  mips_read_fp_register_single (frame, regno + 1, rare_buffer + 4);
+	  mips_read_fp_register_single (frame, regno + 1,
+					rare_buffer.slice (4));
 	}
     }
 }
@@ -6327,15 +6331,13 @@ mips_print_fp_register (struct ui_file *file, const frame_info_ptr &frame,
 			int regnum)
 {				/* Do values for FP (float) regs.  */
   struct gdbarch *gdbarch = get_frame_arch (frame);
-  gdb_byte *raw_buffer;
   std::string flt_str, dbl_str;
 
   const struct type *flt_type = builtin_type (gdbarch)->builtin_float;
   const struct type *dbl_type = builtin_type (gdbarch)->builtin_double;
 
-  raw_buffer
-    = ((gdb_byte *)
-       alloca (2 * register_size (gdbarch, mips_regnum (gdbarch)->fp0)));
+  gdb::byte_vector raw_buffer (2 * register_size (gdbarch,
+						  mips_regnum (gdbarch)->fp0));
 
   gdb_printf (file, "%s:", gdbarch_register_name (gdbarch, regnum));
   gdb_printf (file, "%*s",
@@ -6349,10 +6351,11 @@ mips_print_fp_register (struct ui_file *file, const frame_info_ptr &frame,
       /* 4-byte registers: Print hex and floating.  Also print even
 	 numbered registers as doubles.  */
       mips_read_fp_register_single (frame, regnum, raw_buffer);
-      flt_str = target_float_to_string (raw_buffer, flt_type, "%-17.9g");
+      flt_str = target_float_to_string (raw_buffer.data (), flt_type,
+					"%-17.9g");
 
       get_formatted_print_options (&opts, 'x');
-      print_scalar_formatted (raw_buffer,
+      print_scalar_formatted (raw_buffer.data (),
 			      builtin_type (gdbarch)->builtin_uint32,
 			      &opts, 'w', file);
 
@@ -6361,7 +6364,8 @@ mips_print_fp_register (struct ui_file *file, const frame_info_ptr &frame,
       if ((regnum - gdbarch_num_regs (gdbarch)) % 2 == 0)
 	{
 	  mips_read_fp_register_double (frame, regnum, raw_buffer);
-	  dbl_str = target_float_to_string (raw_buffer, dbl_type, "%-24.17g");
+	  dbl_str = target_float_to_string (raw_buffer.data (), dbl_type,
+					    "%-24.17g");
 
 	  gdb_printf (file, " dbl: %s", dbl_str.c_str ());
 	}
@@ -6372,13 +6376,15 @@ mips_print_fp_register (struct ui_file *file, const frame_info_ptr &frame,
 
       /* Eight byte registers: print each one as hex, float and double.  */
       mips_read_fp_register_single (frame, regnum, raw_buffer);
-      flt_str = target_float_to_string (raw_buffer, flt_type, "%-17.9g");
+      flt_str = target_float_to_string (raw_buffer.data (), flt_type,
+					"%-17.9g");
 
       mips_read_fp_register_double (frame, regnum, raw_buffer);
-      dbl_str = target_float_to_string (raw_buffer, dbl_type, "%-24.17g");
+      dbl_str = target_float_to_string (raw_buffer.data (), dbl_type,
+					"%-24.17g");
 
       get_formatted_print_options (&opts, 'x');
-      print_scalar_formatted (raw_buffer,
+      print_scalar_formatted (raw_buffer.data (),
 			      builtin_type (gdbarch)->builtin_uint64,
 			      &opts, 'g', file);
 

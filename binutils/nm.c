@@ -1,5 +1,5 @@
 /* nm.c -- Describe symbol table of a rel file.
-   Copyright (C) 1991-2024 Free Software Foundation, Inc.
+   Copyright (C) 1991-2025 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -433,7 +433,6 @@ static const char *
 get_elf_symbol_type (unsigned int type)
 {
   static char *bufp;
-  int n;
 
   switch (type)
     {
@@ -448,13 +447,11 @@ get_elf_symbol_type (unsigned int type)
 
   free (bufp);
   if (type >= STT_LOPROC && type <= STT_HIPROC)
-    n = asprintf (&bufp, _("<processor specific>: %d"), type);
+    bufp = xasprintf (_("<processor specific>: %d"), type);
   else if (type >= STT_LOOS && type <= STT_HIOS)
-    n = asprintf (&bufp, _("<OS specific>: %d"), type);
+    bufp = xasprintf (_("<OS specific>: %d"), type);
   else
-    n = asprintf (&bufp, _("<unknown>: %d"), type);
-  if (n < 0)
-    fatal ("%s", xstrerror (errno));
+    bufp = xasprintf (_("<unknown>: %d"), type);
   return bufp;
 }
 
@@ -462,7 +459,6 @@ static const char *
 get_coff_symbol_type (const struct internal_syment *sym)
 {
   static char *bufp;
-  int n;
 
   switch (sym->n_sclass)
     {
@@ -482,9 +478,7 @@ get_coff_symbol_type (const struct internal_syment *sym)
     }
 
   free (bufp);
-  n = asprintf (&bufp, _("<unknown>: %d/%d"), sym->n_sclass, sym->n_type);
-  if (n < 0)
-    fatal ("%s", xstrerror (errno));
+  bufp = xasprintf (_("<unknown>: %d/%d"), sym->n_sclass, sym->n_type);
   return bufp;
 }
 
@@ -682,7 +676,7 @@ print_symname (const char *form, struct extended_symbol_info *info,
 	       const char *name, bfd *abfd)
 {
   char *alloc = NULL;
-  char *atver = NULL;
+  char *atname = NULL;
 
   if (name == NULL)
     name = info->sinfo->name;
@@ -690,9 +684,19 @@ print_symname (const char *form, struct extended_symbol_info *info,
   if (!with_symbol_versions
       && bfd_get_flavour (abfd) == bfd_target_elf_flavour)
     {
-      atver = strchr (name, '@');
+      char *atver = strchr (name, '@');
+
       if (atver)
-	*atver = 0;
+	{
+	  /* PR 32467 - Corrupt binaries might include an @ character in a
+	     symbol name.  Since non-versioned symbol names can be in
+	     read-only memory (via memory mapping of a file's contents) we
+	     cannot just replace the @ character with a NUL.  Instead we
+	     create a truncated copy of the name.  */
+	  atname = xstrdup (name);
+	  atname [atver - name] = 0;
+	  name = atname;
+	}
     }
 
   if (do_demangle && *name)
@@ -703,9 +707,7 @@ print_symname (const char *form, struct extended_symbol_info *info,
     }
 
   if (unicode_display != unicode_default)
-    {
-      name = convert_utf8 (name);
-    }
+    name = convert_utf8 (name);
 
   if (info != NULL && info->elfinfo && with_symbol_versions)
     {
@@ -726,8 +728,8 @@ print_symname (const char *form, struct extended_symbol_info *info,
 	}
     }
   printf (form, name);
-  if (atver)
-    *atver = '@';
+
+  free (atname);
   free (alloc);
 }
 
@@ -1227,7 +1229,8 @@ print_symbol (bfd *        abfd,
 
   format->print_symbol_info (&info, abfd);
 
-  if (line_numbers)
+  const char *symname = bfd_asymbol_name (sym);
+  if (line_numbers && symname != NULL && symname[0] != 0)
     {
       struct lineno_cache *lc = bfd_usrdata (abfd);
       const char *filename, *functionname;
@@ -1258,7 +1261,6 @@ print_symbol (bfd *        abfd,
       else if (bfd_is_und_section (bfd_asymbol_section (sym)))
 	{
 	  unsigned int i;
-	  const char *symname;
 
 	  /* For an undefined symbol, we try to find a reloc for the
              symbol, and print the line number of the reloc.  */
@@ -1274,7 +1276,6 @@ print_symbol (bfd *        abfd,
 	      bfd_map_over_sections (abfd, get_relocs, &rinfo);
 	    }
 
-	  symname = bfd_asymbol_name (sym);
 	  for (i = 0; i < lc->seccount; i++)
 	    {
 	      long j;
@@ -1287,6 +1288,7 @@ print_symbol (bfd *        abfd,
 		  if (r->sym_ptr_ptr != NULL
 		      && (*r->sym_ptr_ptr)->section == sym->section
 		      && (*r->sym_ptr_ptr)->value == sym->value
+		      && bfd_asymbol_name (*r->sym_ptr_ptr) != NULL
 		      && strcmp (symname,
 				 bfd_asymbol_name (*r->sym_ptr_ptr)) == 0
 		      && bfd_find_nearest_line (abfd, lc->secs[i], lc->syms,
@@ -1504,8 +1506,8 @@ display_rel_file (bfd *abfd, bfd *archive_bfd)
   else
     print_size_symbols (abfd, dynamic, symsizes, symcount, archive_bfd);
 
-  if (synthsyms)
-    free (synthsyms);
+  free_lineno_cache (abfd);
+  free (synthsyms);
   free (minisyms);
   free (symsizes);
 }
@@ -1572,26 +1574,29 @@ set_print_format (bfd *file)
 static void
 display_archive (bfd *file)
 {
-  bfd *arfile = NULL;
-  bfd *last_arfile = NULL;
-  char **matching;
-
   format->print_archive_filename (bfd_get_filename (file));
 
   if (print_armap)
     print_symdef_entry (file);
 
+  bfd *last_arfile = NULL;
   for (;;)
     {
-      arfile = bfd_openr_next_archived_file (file, arfile);
-
-      if (arfile == NULL)
+      bfd *arfile = bfd_openr_next_archived_file (file, last_arfile);
+      if (arfile == NULL
+	  || arfile == last_arfile)
 	{
+	  if (arfile != NULL)
+	    bfd_set_error (bfd_error_malformed_archive);
 	  if (bfd_get_error () != bfd_error_no_more_archived_files)
 	    bfd_nonfatal (bfd_get_filename (file));
 	  break;
 	}
 
+      if (last_arfile != NULL)
+	bfd_close (last_arfile);
+
+      char **matching;
       if (bfd_check_format_matches (arfile, bfd_object, &matching))
 	{
 	  set_print_format (arfile);
@@ -1606,21 +1611,11 @@ display_archive (bfd *file)
 	    list_matching_formats (matching);
 	}
 
-      if (last_arfile != NULL)
-	{
-	  free_lineno_cache (last_arfile);
-	  bfd_close (last_arfile);
-	  if (arfile == last_arfile)
-	    return;
-	}
       last_arfile = arfile;
     }
 
   if (last_arfile != NULL)
-    {
-      free_lineno_cache (last_arfile);
-      bfd_close (last_arfile);
-    }
+    bfd_close (last_arfile);
 }
 
 static bool
@@ -1662,7 +1657,6 @@ display_file (char *filename)
       retval = false;
     }
 
-  free_lineno_cache (file);
   if (!bfd_close (file))
     retval = false;
 

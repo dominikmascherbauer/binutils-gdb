@@ -38,11 +38,10 @@
 #include "objfiles.h"
 #include "ada-lang.h"
 #include "dwarf2/tag.h"
-#include "gdbsupport/gdb_tilde_expand.h"
 #include "dwarf2/read-debug-names.h"
+#include "extract-store-integer.h"
 
 #include <algorithm>
-#include <cmath>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -1548,6 +1547,9 @@ write_dwarf_index (dwarf2_per_bfd *per_bfd, const char *dir,
   if (table == nullptr)
     error (_("Cannot use an index to create the index"));
 
+  if (per_bfd->infos.size () > 1)
+    error (_("Cannot make an index when the file has multiple .debug_info"
+	     " sections"));
   if (per_bfd->types.size () > 1)
     error (_("Cannot make an index when the file has multiple .debug_types sections"));
 

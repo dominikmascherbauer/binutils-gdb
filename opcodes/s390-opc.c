@@ -1,5 +1,5 @@
 /* s390-opc.c -- S390 opcode list
-   Copyright (C) 2000-2024 Free Software Foundation, Inc.
+   Copyright (C) 2000-2025 Free Software Foundation, Inc.
    Contributed by Martin Schwidefsky (schwidefsky@de.ibm.com).
 
    This file is part of the GNU opcodes library.
@@ -36,7 +36,9 @@
 
 /* Build-time checks are preferrable over runtime ones.  Use this construct
    in preference where possible.  */
+#ifndef static_assert
 #define static_assert(e) ((void)sizeof (struct { int _:1 - 2 * !(e); }))
+#endif
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
@@ -228,7 +230,9 @@ const struct s390_operand s390_operands[] =
   { 12, 16, 0 },
 #define U16_16      (U12_16 + 1)  /* 16 bit unsigned value starting at 16 */
   { 16, 16, 0 },
-#define U16_32      (U16_16 + 1)  /* 16 bit unsigned value starting at 32 */
+#define U16_20      (U16_16 + 1)  /* 16 bit unsigned value starting at 20 */
+  { 16, 20, 0 },
+#define U16_32      (U16_20 + 1)  /* 16 bit unsigned value starting at 32 */
   { 16, 32, 0 },
 #define U32_16      (U16_32 + 1)  /* 32 bit unsigned value starting at 16 */
   { 32, 16, 0 },
@@ -464,6 +468,7 @@ unused_s390_operands_static_asserts (void)
 #define INSTR_SS_RRRDRD2   6, { R_8,D_20,B_16,R_12,D_36,B_32 }   /* e.g. plo   */
 #define INSTR_SS_RRRDRD3   6, { R_8,R_12,D_20,B_16,D_36,B_32 }   /* e.g. lmd   */
 #define INSTR_SSF_RRDRD    6, { D_20,B_16,D_36,B_32,R_8,0 }      /* e.g. mvcos */
+#define INSTR_SSF_RRDRD2   6, { R_8,D_20,B_16,D_36,B_32,0 }      /* e.g. cal   */
 #define INSTR_SSF_RERDRD2  6, { RE_8,D_20,B_16,D_36,B_32,0 }     /* e.g. lpd   */
 #define INSTR_S_00         4, { 0,0,0,0,0,0 }                    /* e.g. hsch  */
 #define INSTR_S_RD         4, { D_20,B_16,0,0,0,0 }              /* e.g. stck  */
@@ -484,6 +489,8 @@ unused_s390_operands_static_asserts (void)
 #define INSTR_VRI_VVUUU    6, { V_8,V_12,U12_16,U4_32,U4_28,0 }  /* e.g. vftci */
 #define INSTR_VRI_VVUUU2   6, { V_8,V_12,U8_28,U8_16,U4_24,0 }   /* e.g. vpsop */
 #define INSTR_VRI_VR0UU    6, { V_8,R_12,U8_28,U4_24,0,0 }       /* e.g. vcvd  */
+#define INSTR_VRI_VV0UU    6, { V_8,V_12,U8_28,U4_24,0,0 }       /* e.g. vcvdq */
+#define INSTR_VRI_VVV0UV   6, { V_8,V_12,V_16,V_32,U8_24,0 }     /* e.g. veval */
 #define INSTR_VRX_VRRD     6, { V_8,D_20,X_12,B_16,0,0 }         /* e.g. vl    */
 #define INSTR_VRX_VV       6, { V_8,V_12,0,0,0,0 }               /* e.g. vlr   */
 #define INSTR_VRX_VRRDU    6, { V_8,D_20,X_12,B_16,U4_32,0 }     /* e.g. vlrep */
@@ -494,10 +501,10 @@ unused_s390_operands_static_asserts (void)
 #define INSTR_VRS_VRRDU    6, { V_8,R_12,D_20,B_16,U4_32,0 }     /* e.g. vlvg  */
 #define INSTR_VRS_VRRD     6, { V_8,R_12,D_20,B_16,0,0 }         /* e.g. vlvgb */
 #define INSTR_VRS_RRDV     6, { V_32,R_12,D_20,B_16,0,0 }        /* e.g. vlrlr */
-#define INSTR_VRR_0V       6, { V_12,0,0,0,0,0 }                 /* e.g. vtp   */
 #define INSTR_VRR_VRR      6, { V_8,R_12,R_16,0,0,0 }            /* e.g. vlvgp */
 #define INSTR_VRR_VVV0U    6, { V_8,V_12,V_16,U4_32,0,0 }        /* e.g. vmrh  */
 #define INSTR_VRR_VVV0U0   6, { V_8,V_12,V_16,U4_24,0,0 }        /* e.g. vfaeb */
+#define INSTR_VRR_VVV0U02  6, { V_8,V_12,V_16,U4_28,0,0 }        /* e.g. vd */
 #define INSTR_VRR_VVV0U1   INSTR_VRR_VVV0U0                      /* e.g. vfaebs*/
 #define INSTR_VRR_VVV0U2   INSTR_VRR_VVV0U0                      /* e.g. vfaezb*/
 #define INSTR_VRR_VVV0U3   INSTR_VRR_VVV0U0                      /* e.g. vfaezbs*/
@@ -523,6 +530,9 @@ unused_s390_operands_static_asserts (void)
 #define INSTR_VRR_VV0UUU   6, { V_8,V_12,U4_32,U4_28,U4_24,0 }   /* e.g. vcdg  */
 #define INSTR_VRR_VVVU0UV  6, { V_8,V_12,V_16,V_32,U4_28,U4_20 } /* e.g. vfma  */
 #define INSTR_VRR_VV0U0U   6, { V_8,V_12,U4_32,U4_24,0,0 }       /* e.g. vistr */
+#define INSTR_VRR_0V       6, { V_12,0,0,0,0,0 }                 /* e.g. vtp   */
+#define INSTR_VRR_0V0U     6, { V_12,U16_20,0,0,0,0 }            /* e.g. vtp   */
+#define INSTR_VRR_0VVU     6, { V_12,V_16,U16_20,0,0,0 }         /* e.g. vtz   */
 #define INSTR_VRR_0VV0U    6, { V_12,V_16,U4_24,0,0,0 }          /* e.g. vcp   */
 #define INSTR_VRR_RV0U     6, { R_8,V_12,U4_24,0,0,0 }           /* e.g. vcvb  */
 #define INSTR_VRR_RV0UU    6, { R_8,V_12,U4_24,U4_28,0,0 }       /* e.g. vcvb  */
@@ -691,6 +701,7 @@ unused_s390_operands_static_asserts (void)
 #define MASK_SS_RRRDRD2   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
 #define MASK_SS_RRRDRD3   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
 #define MASK_SSF_RRDRD    { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+#define MASK_SSF_RRDRD2   { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
 #define MASK_SSF_RERDRD2  { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
 #define MASK_S_00         { 0xff, 0xff, 0xff, 0xff, 0x00, 0x00 }
 #define MASK_S_RD         { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
@@ -711,6 +722,8 @@ unused_s390_operands_static_asserts (void)
 #define MASK_VRI_VVUUU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
 #define MASK_VRI_VVUUU2   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
 #define MASK_VRI_VR0UU    { 0xff, 0x00, 0xff, 0x00, 0x00, 0xff }
+#define MASK_VRI_VV0UU    { 0xff, 0x00, 0xff, 0x00, 0x00, 0xff }
+#define MASK_VRI_VVV0UV   { 0xff, 0x00, 0x0f, 0x00, 0x00, 0xff }
 #define MASK_VRX_VRRD     { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
 #define MASK_VRX_VV       { 0xff, 0x00, 0xff, 0xff, 0xf0, 0xff }
 #define MASK_VRX_VRRDU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
@@ -721,10 +734,10 @@ unused_s390_operands_static_asserts (void)
 #define MASK_VRS_VRRDU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
 #define MASK_VRS_VRRD     { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
 #define MASK_VRS_RRDV     { 0xff, 0xf0, 0x00, 0x00, 0x00, 0xff }
-#define MASK_VRR_0V       { 0xff, 0xf0, 0xff, 0xff, 0xf0, 0xff }
 #define MASK_VRR_VRR      { 0xff, 0x00, 0x0f, 0xff, 0xf0, 0xff }
 #define MASK_VRR_VVV0U    { 0xff, 0x00, 0x0f, 0xff, 0x00, 0xff }
 #define MASK_VRR_VVV0U0   { 0xff, 0x00, 0x0f, 0x0f, 0xf0, 0xff }
+#define MASK_VRR_VVV0U02  { 0xff, 0x00, 0x0f, 0xf0, 0xf0, 0xff }
 #define MASK_VRR_VVV0U1   { 0xff, 0x00, 0x0f, 0x1f, 0xf0, 0xff }
 #define MASK_VRR_VVV0U2   { 0xff, 0x00, 0x0f, 0x2f, 0xf0, 0xff }
 #define MASK_VRR_VVV0U3   { 0xff, 0x00, 0x0f, 0x3f, 0xf0, 0xff }
@@ -750,6 +763,9 @@ unused_s390_operands_static_asserts (void)
 #define MASK_VRR_VV0UUU   { 0xff, 0x00, 0xff, 0x00, 0x00, 0xff }
 #define MASK_VRR_VVVU0UV  { 0xff, 0x00, 0x00, 0xf0, 0x00, 0xff }
 #define MASK_VRR_VV0U0U   { 0xff, 0x00, 0xff, 0x0f, 0x00, 0xff }
+#define MASK_VRR_0V       { 0xff, 0xf0, 0xff, 0xff, 0xf0, 0xff }
+#define MASK_VRR_0V0U     { 0xff, 0xf0, 0xf0, 0x00, 0x00, 0xff }
+#define MASK_VRR_0VVU     { 0xff, 0xf0, 0x00, 0x00, 0x00, 0xff }
 #define MASK_VRR_0VV0U    { 0xff, 0xf0, 0x0f, 0x0f, 0xf0, 0xff }
 #define MASK_VRR_RV0U     { 0xff, 0x00, 0xff, 0x0f, 0xf0, 0xff }
 #define MASK_VRR_RV0UU    { 0xff, 0x00, 0xff, 0x00, 0xf0, 0xff }

@@ -612,6 +612,8 @@ elf_rel_plt_read (minimal_symbol_reader &reader,
       const size_t got_suffix_len = strlen (SYMBOL_GOT_PLT_SUFFIX);
 
       name = bfd_asymbol_name (*relplt->relocation[reloc].sym_ptr_ptr);
+      if (!name)
+	continue;
       address = relplt->relocation[reloc].address;
 
       asection *msym_section;
@@ -1541,8 +1543,8 @@ Set whether CTF is always read."),
 			   _("\
 Show whether CTF is always read."),
 			   _("\
-When off, CTF is only read if DWARF is not present.  When on, CTF is read\
- regardless of whether DWARF is present."),
+When off, CTF is only read if DWARF is not present.  When on, CTF is read\n\
+regardless of whether DWARF is present."),
 			   nullptr /* set_func */, nullptr /* show_func */,
 			   &setlist, &showlist);
 }

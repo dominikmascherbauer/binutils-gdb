@@ -1608,7 +1608,8 @@ memory_xfer_partial (struct target_ops *ops, enum target_object object,
   if (len == 0)
     return TARGET_XFER_EOF;
 
-  memaddr = gdbarch_remove_non_address_bits (current_inferior ()->arch (),
+  memaddr
+   = gdbarch_remove_non_address_bits_memory (current_inferior ()->arch (),
 					     memaddr);
 
   /* Fill in READBUF with breakpoint shadows, or WRITEBUF with
@@ -1754,7 +1755,7 @@ target_xfer_partial (struct target_ops *ops,
    If an error occurs, no guarantee is made about the contents of the data at
    MYADDR.  In particular, the caller should not depend upon partial reads
    filling the buffer with good data.  There is no way for the caller to know
-   how much good data might have been transfered anyway.  Callers that can
+   how much good data might have been transferred anyway.  Callers that can
    deal with partial reads should call target_read (which will retry until
    it makes no progress, and then return how much was transferred).  */
 

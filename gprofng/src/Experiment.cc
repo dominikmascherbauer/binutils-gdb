@@ -1,4 +1,4 @@
-/* Copyright (C) 2021-2024 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2025 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -252,9 +252,7 @@ Experiment::ExperimentFile::fgets ()
   if (bufsz == 0)
     {
       bufsz = 1024;
-      buffer = (char *) malloc (bufsz);
-      if (buffer == NULL)
-	return NULL;
+      buffer = (char *) xmalloc (bufsz);
       buffer[bufsz - 1] = (char) 1; // sentinel
     }
   char *res = ::fgets (buffer, bufsz, fh);
@@ -263,9 +261,7 @@ Experiment::ExperimentFile::fgets ()
   while (buffer[bufsz - 1] == (char) 0)
     {
       int newsz = bufsz + 1024;
-      char *newbuf = (char *) malloc (newsz);
-      if (newbuf == NULL)
-	return NULL;
+      char *newbuf = (char *) xmalloc (newsz);
       memcpy (newbuf, buffer, bufsz);
       free (buffer);
       buffer = newbuf;
@@ -451,19 +447,19 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
       if (str != NULL)
 	{
 	  found = 1;
-	  exp->coll_params.start_delay = strdup (str);
+	  exp->coll_params.start_delay = xstrdup (str);
 	}
       str = attrs->getValue (SP_JCMD_TERMINATE);
       if (str != NULL)
 	{
 	  found = 1;
-	  exp->coll_params.terminate = strdup (str);
+	  exp->coll_params.terminate = xstrdup (str);
 	}
       str = attrs->getValue (SP_JCMD_PAUSE_SIG);
       if (str != NULL)
 	{
 	  found = 1;
-	  exp->coll_params.pause_sig = strdup (str);
+	  exp->coll_params.pause_sig = xstrdup (str);
 	}
       str = attrs->getValue (SP_JCMD_SAMPLE_PERIOD);
       if (str != NULL)
@@ -491,7 +487,7 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
       if (str != NULL)
 	{
 	  found = 1;
-	  exp->coll_params.linetrace = strdup (str);
+	  exp->coll_params.linetrace = xstrdup (str);
 	}
 
       str = attrs->getValue (SP_JCMD_COLLENV);
@@ -524,11 +520,11 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
       pushElem (EL_SYSTEM);
       const char *str = attrs->getValue (NTXT ("hostname"));
       if (str != NULL)
-	exp->hostname = strdup (str);
+	exp->hostname = xstrdup (str);
       str = attrs->getValue (NTXT ("os"));
       if (str != NULL)
 	{
-	  exp->os_version = strdup (str);
+	  exp->os_version = xstrdup (str);
 	  /* For Linux experiments expect sparse thread ID's */
 	  if (strncmp (str, NTXT ("SunOS"), 5) != 0)
 	    exp->sparse_threads = true;
@@ -547,7 +543,7 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
 	    exp->platform = Sparc;
 	  exp->need_swap_endian = (DbeSession::platform == Sparc) ?
 		  (exp->platform != Sparc) : (exp->platform == Sparc);
-	  exp->architecture = strdup (str);
+	  exp->architecture = xstrdup (str);
 	}
       str = attrs->getValue (NTXT ("pagesz"));
       if (str != NULL)
@@ -624,7 +620,7 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
 	exp->sid = atoi (str);
       str = attrs->getValue (NTXT ("cwd"));
       if (str != NULL)
-	exp->ucwd = strdup (str);
+	exp->ucwd = xstrdup (str);
       str = attrs->getValue (NTXT ("pagesz"));
       if (str != NULL)
 	exp->page_size = atoi (str);
@@ -663,7 +659,7 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
 	  else if (strcmp (str, SP_JCMD_ARCHIVE) == 0)
 	    {
 	      StringBuilder sb;
-	      sb.sprintf (GTXT ("gp-archive run: XXXXXXX"));
+	      sb.sprintf (GTXT ("gprofng-archive run: XXXXXXX"));
 	      exp->pprocq->append (new Emsg (CMSG_WARN, sb));
 	    }
 	  else if (strcmp (str, SP_JCMD_SAMPLE) == 0)
@@ -1061,7 +1057,7 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
 	  exp->has_java = true;
 	  str = attrs->getValue (NTXT ("jversion"));
 	  if (str != NULL)
-	    exp->jversion = strdup (str);
+	    exp->jversion = xstrdup (str);
 	}
       else if (strcmp (str, NTXT ("datarace")) == 0)
 	{
@@ -1148,7 +1144,7 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
 		{
 		  fldDscr->vtype = TYPE_DATE;
 		  const char *fmt = attrs->getValue (NTXT ("format"));
-		  fldDscr->format = strdup (fmt ? fmt : "");
+		  fldDscr->format = xstrdup (fmt ? fmt : "");
 		}
 	    }
 	  propDscr->vtype = fldDscr->vtype;
@@ -1173,7 +1169,7 @@ Experiment::ExperimentHandler::startElement (char*, char*, char *qName, Attribut
 
 	  str = attrs->getValue (NTXT ("uname"));
 	  if (str)
-	    propDscr->uname = strdup (PTXT ((char*) str));
+	    propDscr->uname = xstrdup (PTXT ((char*) str));
 	  str = attrs->getValue (NTXT ("noshow"));
 	  if (str && atoi (str) != 0)
 	    propDscr->flags |= PRFLAG_NOSHOW;
@@ -4589,7 +4585,7 @@ Experiment::readPacket (Data_window *dwin, Data_window::Span *span)
 		else
 		  {
 		    // bug 6909545: garbage in 64-bit JAVA_INFO
-		    char *nstack = (char*) malloc (stack_size);
+		    char *nstack = (char*) xmalloc (stack_size);
 		    char *dst = nstack;
 		    char *srcmax = stack + stack_size - sizeof (uint64_t);
 		    for (char *src = stack; src <= srcmax;)
@@ -5845,7 +5841,7 @@ Experiment::checkFileInArchive (const char *fname, bool archiveFile)
       DbeFile *df = archiveMap->get (aname);
       free (aname);
       if (df)
-	return strdup (df->get_location ());
+	return xstrdup (df->get_location ());
       return NULL;
     }
   if (founder_exp)
@@ -6485,14 +6481,14 @@ Experiment::copy_file_to_archive (const char *name, const char *aname, int hide_
     {
       if (errno == EEXIST)
 	return 0;
-      fprintf (stderr, GTXT ("gp-archive: unable to copy `%s': %s\n"),
+      fprintf (stderr, GTXT ("gprofng-archive: unable to copy `%s': %s\n"),
 	       name, STR (strerror (errno)));
       return 1;
     }
 
   if (dbe_stat_file (name, NULL) != 0)
     {
-      fprintf (stderr, GTXT ("gp-archive: cannot access file `%s': %s\n"),
+      fprintf (stderr, GTXT ("gprofng-archive: cannot access file `%s': %s\n"),
 	       name, STR (strerror (errno)));
       close (fd_w);
       return 1;
@@ -6501,7 +6497,7 @@ Experiment::copy_file_to_archive (const char *name, const char *aname, int hide_
   int fd_r = ::open64 (name, O_RDONLY);
   if (fd_r == -1)
     {
-      fprintf (stderr, GTXT ("gp-archive: unable to open `%s': %s\n"),
+      fprintf (stderr, GTXT ("gprofng-archive: unable to open `%s': %s\n"),
 	       name, strerror (errno));
       close (fd_w);
       unlink (aname);
@@ -6521,7 +6517,7 @@ Experiment::copy_file_to_archive (const char *name, const char *aname, int hide_
       n1 = (int) write (fd_w, buf, n);
       if (n != n1)
 	{
-	  fprintf (stderr, GTXT ("gp-archive: unable to write %d bytes to `%s': %s\n"),
+	  fprintf (stderr, GTXT ("gprofng-archive: unable to write %d bytes to `%s': %s\n"),
 		   n, aname, STR (strerror (errno)));
 	  do_unlink = true;
 	  break;
@@ -6541,7 +6537,7 @@ Experiment::copy_file_to_archive (const char *name, const char *aname, int hide_
   if (do_unlink)
     {
       if (!hide_msg)
-	fprintf (stderr, GTXT ("gp-archive: remove %s\n"), aname);
+	fprintf (stderr, GTXT ("gprofng-archive: remove %s\n"), aname);
       unlink (aname);
       return 1;
     }
@@ -6570,11 +6566,11 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
   if (!name || !aname || !common_archive)
     {
       if (!name)
-	fprintf (stderr, GTXT ("gp-archive: Internal error: file name is NULL\n"));
+	fprintf (stderr, GTXT ("gprofng-archive: Internal error: file name is NULL\n"));
       if (!aname)
-	fprintf (stderr, GTXT ("gp-archive: Internal error: file name in archive is NULL\n"));
+	fprintf (stderr, GTXT ("gprofng-archive: Internal error: file name in archive is NULL\n"));
       if (!common_archive)
-	fprintf (stderr, GTXT ("gp-archive: Internal error: path to common archive is NULL\n"));
+	fprintf (stderr, GTXT ("gprofng-archive: Internal error: path to common archive is NULL\n"));
       return 1;
     }
   // Check if file is already archived
@@ -6588,19 +6584,14 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
       long size = pathconf (NTXT ("."), _PC_PATH_MAX);
       if (size < 0)
 	{
-	  fprintf (stderr, GTXT ("gp-archive: Fatal error: pathconf(\".\", _PC_PATH_MAX) failed\n"));
+	  fprintf (stderr, GTXT ("gprofng-archive: Fatal error: pathconf(\".\", _PC_PATH_MAX) failed\n"));
 	  return 1;
 	}
-      char *buf = (char *) malloc ((size_t) size);
-      if (buf == NULL)
-	{
-	  fprintf (stderr, GTXT ("gp-archive: Fatal error: unable to allocate memory\n"));
-	  return 1;
-	}
+      char *buf = (char *) xmalloc ((size_t) size);
       char *ptr = getcwd (buf, (size_t) size);
       if (ptr == NULL)
 	{
-	  fprintf (stderr, GTXT ("gp-archive: Fatal error: cannot determine current directory\n"));
+	  fprintf (stderr, GTXT ("gprofng-archive: Fatal error: cannot determine current directory\n"));
 	  free (buf);
 	  return 1;
 	}
@@ -6628,12 +6619,12 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
       free (abs_aname);
       if (NULL != errmsg)
 	{
-	  fprintf (stderr, GTXT ("gp-archive: Fatal error: %s\n"), errmsg);
+	  fprintf (stderr, GTXT ("gprofng-archive: Fatal error: %s\n"), errmsg);
 	  free (errmsg);
 	  return 1;
 	}
       fprintf (stderr,
-	       GTXT ("gp-archive: Fatal error: get_cksum(%s) returned %d\n"),
+	       GTXT ("gprofng-archive: Fatal error: get_cksum(%s) returned %d\n"),
 	       name, crcval);
       return 1;
     }
@@ -6645,7 +6636,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
       free (cad);
       free (abs_aname);
       fprintf (stderr,
-	       GTXT ("gp-archive: Fatal error: unable to allocate memory\n"));
+	       GTXT ("gprofng-archive: Fatal error: unable to allocate memory\n"));
       return 1;
     }
   // Check if full name is not too long
@@ -6653,7 +6644,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
   long max = pathconf (cad, _PC_PATH_MAX);
   if ((max < 0) || (len <= 0))
     { // unknown error
-      fprintf (stderr, GTXT ("gp-archive: Fatal error: pathconf(%s, _PC_PATH_MAX) failed\n"),
+      fprintf (stderr, GTXT ("gprofng-archive: Fatal error: pathconf(%s, _PC_PATH_MAX) failed\n"),
 	       cad);
       free (abs_caname);
       free (cad);
@@ -6668,7 +6659,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
 	  // Yes, we can do it
 	  abs_caname[max - 1] = 0;
 	  if (!hide_msg)
-	    fprintf (stderr, GTXT ("gp-gp-archive: file path is too long - truncated:%s\n"),
+	    fprintf (stderr, GTXT ("gprofng-archive: file path is too long - truncated:%s\n"),
 		     abs_caname);
 	}
     }
@@ -6678,7 +6669,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
   max = pathconf (cad, _PC_NAME_MAX);
   if ((max < 0) || (len <= 0))
     { // unknown error
-      fprintf (stderr, GTXT ("gp-archive: Fatal error: pathconf(%s, _PC_NAME_MAX) failed\n"),
+      fprintf (stderr, GTXT ("gprofng-archive: Fatal error: pathconf(%s, _PC_NAME_MAX) failed\n"),
 	       cad);
       free (abs_caname);
       free (cad);
@@ -6693,7 +6684,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
 	  // Yes, we can do it
 	  cafname[max - 1] = 0;
 	  if (!hide_msg)
-	    fprintf (stderr, GTXT ("gp-archive: file name is too long - truncated:%s\n"),
+	    fprintf (stderr, GTXT ("gprofng-archive: file name is too long - truncated:%s\n"),
 		     abs_caname);
 	}
     }
@@ -6708,7 +6699,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
       res = copy_file_to_archive (name, t, hide_msg); // hide messages
       if (res != 0)
 	{
-	  fprintf (stderr, GTXT ("gp-archive: Fatal error: cannot copy file %s to temporary file: %s\n"),
+	  fprintf (stderr, GTXT ("gprofng-archive: Fatal error: cannot copy file %s to temporary file: %s\n"),
 		   name, t);
 	  unlink (t);
 	  free (t);
@@ -6731,7 +6722,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
 	{
 	  if (errno != EEXIST)
 	    {
-	      fprintf (stderr, GTXT ("gp-archive: Fatal error: rename(%s, %s) returned error: %d\n"),
+	      fprintf (stderr, GTXT ("gprofng-archive: Fatal error: rename(%s, %s) returned error: %d\n"),
 		       t, abs_caname, res);
 	      unlink (t);
 	      free (t);
@@ -6755,7 +6746,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
 	  char *rel_caname = dbe_sprintf ("%s/%s", common_archive, cafname);
 	  if (rel_caname == NULL)
 	    {
-	      fprintf (stderr, GTXT ("gp-archive: Fatal error: unable to allocate memory\n"));
+	      fprintf (stderr, GTXT ("gprofng-archive: Fatal error: unable to allocate memory\n"));
 	      return 1;
 	    }
 	  lname = get_relative_link (rel_caname, aname);
@@ -6765,7 +6756,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
 	{
 	  if (abs_aname == NULL)
 	    {
-	      fprintf (stderr, GTXT ("gp-archive: Fatal error: unable to allocate memory\n"));
+	      fprintf (stderr, GTXT ("gprofng-archive: Fatal error: unable to allocate memory\n"));
 	      return 1;
 	    }
 	  lname = get_relative_link (abs_caname, abs_aname);
@@ -6776,7 +6767,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
   free (abs_aname);
   if (lname == NULL)
     {
-      fprintf (stderr, GTXT ("gp-archive: Fatal error: unable to allocate memory\n"));
+      fprintf (stderr, GTXT ("gprofng-archive: Fatal error: unable to allocate memory\n"));
       return 1;
     }
   // Create symbolic link: aname -> lname
@@ -6785,7 +6776,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
       res = symlink (lname, aname);
       if (res != 0)
 	{
-	  fprintf (stderr, GTXT ("gp-archive: Fatal error: symlink(%s, %s) returned error: %d (errno=%s)\n"),
+	  fprintf (stderr, GTXT ("gprofng-archive: Fatal error: symlink(%s, %s) returned error: %d (errno=%s)\n"),
 		   lname, aname, res, strerror (errno));
 	  free (abs_caname);
 	  free (lname);
@@ -6797,7 +6788,7 @@ Experiment::copy_file_to_common_archive (const char *name, const char *aname,
     }
   else
     {
-      fprintf (stderr, GTXT ("gp-archive: Internal error: file does not exist in common archive: %s\n"),
+      fprintf (stderr, GTXT ("gprofng-archive: Internal error: file does not exist in common archive: %s\n"),
 	       abs_caname);
       res = 1;
     }
@@ -6823,7 +6814,7 @@ Experiment::copy_file (char *name, char *aname, int hide_msg, char *common_archi
 					    common_archive, relative_path))
 	return 0;
       // Error. For now - fatal error. Message is already printed.
-      fprintf (stderr, GTXT ("gp-archive: Fatal error: cannot copy file %s to common archive %s\n"),
+      fprintf (stderr, GTXT ("gprofng-archive: Fatal error: cannot copy file %s to common archive %s\n"),
 	       name, common_archive);
       return 1;
     }

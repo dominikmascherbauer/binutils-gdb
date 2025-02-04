@@ -17,8 +17,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#ifndef COMMON_PATHSTUFF_H
-#define COMMON_PATHSTUFF_H
+#ifndef GDBSUPPORT_PATHSTUFF_H
+#define GDBSUPPORT_PATHSTUFF_H
 
 #include "gdbsupport/byte-vector.h"
 #include "gdbsupport/array-view.h"
@@ -29,6 +29,9 @@
 #include <array>
 
 /* Path utilities.  */
+
+/* String containing the current directory (what getwd would return).  */
+extern char *current_directory;
 
 /* Return the real path of FILENAME, expanding all the symbolic links.
 
@@ -47,14 +50,14 @@ extern std::string gdb_realpath_keepfile (const char *filename);
    PATH cannot be NULL or the empty string.
    This does not resolve symlinks however, use gdb_realpath for that.
 
-   Contrary to "gdb_realpath", this function uses CURRENT_DIRECTORY
-   for the path expansion.  This may lead to scenarios the current
-   working directory (CWD) is different than CURRENT_DIRECTORY.
+   Contrary to "gdb_realpath", this function uses CWD for the path
+   expansion.  This may lead to scenarios the current working
+   directory is different than CWD.
 
-   If CURRENT_DIRECTORY is NULL, this function returns a copy of
-   PATH.  */
+   If CWD is NULL, this function returns a copy of PATH.  */
 
-extern std::string gdb_abspath (const char *path);
+extern std::string gdb_abspath (const char *path,
+				const char *cwd = current_directory);
 
 /* Overload of gdb_abspath which takes std::string.  */
 
@@ -177,7 +180,4 @@ extern const char *get_shell ();
 
 extern gdb::char_vector make_temp_filename (const std::string &f);
 
-/* String containing the current directory (what getwd would return).  */
-extern char *current_directory;
-
-#endif /* COMMON_PATHSTUFF_H */
+#endif /* GDBSUPPORT_PATHSTUFF_H */

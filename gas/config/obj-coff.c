@@ -1,5 +1,5 @@
 /* coff object file format
-   Copyright (C) 1989-2024 Free Software Foundation, Inc.
+   Copyright (C) 1989-2025 Free Software Foundation, Inc.
 
    This file is part of GAS.
 
@@ -567,9 +567,7 @@ obj_coff_ident (int ignore ATTRIBUTE_UNUSED)
    a C_EFCN. And a second reason is that the code is more clear this
    way. (at least I think it is :-).  */
 
-#define SKIP_SEMI_COLON()	while (*input_line_pointer++ != ';')
-#define SKIP_WHITESPACES()	while (*input_line_pointer == ' ' || \
-				       *input_line_pointer == '\t')  \
+#define SKIP_WHITESPACES()	while (is_whitespace (*input_line_pointer)) \
                                   input_line_pointer++;
 
 static void
@@ -1150,8 +1148,8 @@ obj_coff_weak (int ignore ATTRIBUTE_UNUSED)
 	}
       c = 0;
       symbolP = symbol_find_or_make (name);
-      *input_line_pointer = c;
-      SKIP_WHITESPACE_AFTER_NAME ();
+      restore_line_pointer (c);
+      SKIP_WHITESPACE ();
       S_SET_WEAK (symbolP);
 
       if (c == ',')
@@ -1175,6 +1173,15 @@ coff_obj_read_begin_hook (void)
   know (sizeof (SYMENT) == sizeof (AUXENT));
   know (SYMESZ == AUXESZ);
   tag_init ();
+}
+
+void
+coff_assign_symbol (symbolS *symp ATTRIBUTE_UNUSED)
+{
+#ifndef TE_PE
+  /* "set" symbols are local unless otherwise specified.  */
+  SF_SET_LOCAL (symp);
+#endif
 }
 
 symbolS *coff_last_function;
@@ -1548,8 +1555,8 @@ obj_coff_section (int ignore ATTRIBUTE_UNUSED)
 
   c = get_symbol_name (&section_name);
   name = xmemdup0 (section_name, input_line_pointer - section_name);
-  *input_line_pointer = c;
-  SKIP_WHITESPACE_AFTER_NAME ();
+  restore_line_pointer (c);
+  SKIP_WHITESPACE ();
 
   exp = 0;
   flags = SEC_NO_FLAGS;
@@ -1847,7 +1854,7 @@ symbol_dump (void)
 
 #endif /* DEBUG */
 
-const pseudo_typeS coff_pseudo_table[] =
+static const pseudo_typeS coff_pseudo_table[] =
 {
   {"ABORT", s_abort, 0},
   /* We accept the .bss directive for backward compatibility with
@@ -1888,13 +1895,13 @@ const pseudo_typeS coff_pseudo_table[] =
 };
 
 
-/* Support for a COFF emulation.  */
-
-static void
+void
 coff_pop_insert (void)
 {
   pop_insert (coff_pseudo_table);
 }
+
+#ifdef USE_EMULATIONS /* Support for a COFF emulation.  */
 
 static int
 coff_separate_stab_sections (void)
@@ -1910,6 +1917,7 @@ const struct format_ops coff_format_ops =
   0,    /* begin */
   0,	/* end.  */
   c_dot_file_symbol,
+  coff_assign_symbol,
   coff_frob_symbol,
   0,	/* frob_file */
   0,	/* frob_file_before_adjust */
@@ -1926,7 +1934,6 @@ const struct format_ops coff_format_ops =
   0,	/* s_get_type */
   0,	/* s_set_type */
   0,	/* copy_symbol_attributes */
-  0,	/* generate_asm_lineno */
   0,	/* process_stab */
   coff_separate_stab_sections,
   obj_coff_init_stab_section,
@@ -1938,3 +1945,5 @@ const struct format_ops coff_format_ops =
   coff_obj_symbol_clone_hook,
   coff_adjust_symtab
 };
+
+#endif /* USE_EMULATIONS */

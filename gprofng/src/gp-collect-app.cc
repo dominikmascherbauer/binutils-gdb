@@ -1,4 +1,4 @@
-/* Copyright (C) 2021-2024 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2025 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -63,6 +63,7 @@ static Process **processes;
 int
 main (int argc, char *argv[])
 {
+  xmalloc_set_program_name (argv[0]);
   // disable any alarm that might be pending
   int r = alarm (0);
   if (r != 0)
@@ -1230,12 +1231,7 @@ collect::do_flag (const char *flags)
 	  disabled = 1;
 	  if (verbose != 1)
 	    {
-// Ruud
 	      Application::print_version_info ();
-/*
-	      dbe_write (2, NTXT ("GNU %s version %s\n"),
-			 get_basename (prog_name), VERSION);
-*/
 	      verbose = 1;
 	    }
 	  break;
@@ -1250,22 +1246,12 @@ collect::do_flag (const char *flags)
 	case 'v':
 	  if (verbose != 1)
 	    {
-// Ruud
 	      Application::print_version_info ();
-/*
-	      dbe_write (2, NTXT ("GNU %s version %s\n"),
-			 get_basename (prog_name), VERSION);
-*/
 	      verbose = 1;
 	    }
 	  break;
 	case 'V':
-// Ruud
 	  Application::print_version_info ();
-/*
-	  dbe_write (2, NTXT ("GNU %s version %s\n"),
-		     get_basename (prog_name), VERSION);
-*/
 	  /* no further processing.... */
 	  exit (0);
 	}
@@ -1494,7 +1480,8 @@ collect::usage ()
     "\n"
     "See also:\n"
     "\n"
-    "gprofng(1), gp-archive(1), gp-display-html(1), gp-display-src(1), gp-display-text(1)\n"));
+    "gprofng(1), gprofng-archive(1), gprofng-display-html(1), "
+    "gpgprofng-display-src(1), gprofng-display-text(1)\n"));
 }
 
 void

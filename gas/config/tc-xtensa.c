@@ -1,5 +1,5 @@
 /* tc-xtensa.c -- Assemble Xtensa instructions.
-   Copyright (C) 2003-2024 Free Software Foundation, Inc.
+   Copyright (C) 2003-2025 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -735,9 +735,9 @@ enum
   option_abi_call0,
 };
 
-const char *md_shortopts = "";
+const char md_shortopts[] = "";
 
-struct option md_longopts[] =
+const struct option md_longopts[] =
 {
   { "density", no_argument, NULL, option_density },
   { "no-density", no_argument, NULL, option_no_density },
@@ -820,8 +820,7 @@ struct option md_longopts[] =
   { NULL, no_argument, NULL, 0 }
 };
 
-size_t md_longopts_size = sizeof md_longopts;
-
+const size_t md_longopts_size = sizeof md_longopts;
 
 int
 md_parse_option (int c, const char *arg)
@@ -1573,8 +1572,8 @@ xtensa_literal_pseudo (int ignored ATTRIBUTE_UNUSED)
   c = get_symbol_name (&base_name);
   /* Just after name is now '\0'.  */
   p = input_line_pointer;
-  *p = c;
-  SKIP_WHITESPACE_AFTER_NAME ();
+  restore_line_pointer (c);
+  SKIP_WHITESPACE ();
 
   if (*input_line_pointer != ',' && *input_line_pointer != ':')
     {
@@ -1858,11 +1857,12 @@ expression_end (const char *name)
 	case ',':
 	case ':':
 	  return name;
-	case ' ':
-	case '\t':
-	  ++name;
-	  continue;
 	default:
+	  if (is_whitespace (*name))
+	    {
+	      ++name;
+	      continue;
+	    }
 	  return 0;
 	}
     }
@@ -6159,8 +6159,8 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
 {
   arelent *reloc;
 
-  reloc = XNEW (arelent);
-  reloc->sym_ptr_ptr = XNEW (asymbol *);
+  reloc = notes_alloc (sizeof (arelent));
+  reloc->sym_ptr_ptr = notes_alloc (sizeof (asymbol *));
   *reloc->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_addsy);
   reloc->address = fixp->fx_frag->fr_address + fixp->fx_where;
 
@@ -6176,8 +6176,6 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
       as_bad_where (fixp->fx_file, fixp->fx_line,
 		    _("cannot represent `%s' relocation in object file"),
 		    bfd_get_reloc_code_name (fixp->fx_r_type));
-      free (reloc->sym_ptr_ptr);
-      free (reloc);
       return NULL;
     }
 

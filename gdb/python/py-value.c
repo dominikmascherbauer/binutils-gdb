@@ -233,7 +233,8 @@ valpy_init (PyObject *self, PyObject *args, PyObject *kwds)
    each.  */
 void
 gdbpy_preserve_values (const struct extension_language_defn *extlang,
-		       struct objfile *objfile, htab_t copied_types)
+		       struct objfile *objfile,
+		       copied_types_hash_t &copied_types)
 {
   value_object *iter;
 
@@ -520,14 +521,7 @@ valpy_get_dynamic_type (PyObject *self, void *closure)
    If LENGTH is provided then the length parameter is set to LENGTH.
    Otherwise if the value is an array of known length then the array's length
    is used.  Otherwise the length will be set to -1 (meaning first null of
-   appropriate with).
-
-   Note: In order to not break any existing uses this allows creating
-   lazy strings from anything.  PR 20769.  E.g.,
-   gdb.parse_and_eval("my_int_variable").lazy_string().
-   "It's easier to relax restrictions than it is to impose them after the
-   fact."  So we should be flagging any unintended uses as errors, but it's
-   perhaps too late for that.  */
+   appropriate with).  */
 
 static PyObject *
 valpy_lazy_string (PyObject *self, PyObject *args, PyObject *kw)
@@ -595,9 +589,7 @@ valpy_lazy_string (PyObject *self, PyObject *args, PyObject *kw)
 	  addr = value_as_address (value);
 	  break;
 	default:
-	  /* Should flag an error here.  PR 20769.  */
-	  addr = value->address ();
-	  break;
+	  error (_("Cannot make lazy string from this object"));
 	}
 
       str_obj = gdbpy_create_lazy_string_object (addr, length, user_encoding,
@@ -815,7 +807,9 @@ valpy_format_string (PyObject *self, PyObject *args, PyObject *kw)
 	}
     }
 
-  string_file stb (PyObject_IsTrue (styling_obj));
+  /* We force styling_obj to be a 'bool' when we parse the args above.  */
+  gdb_assert (PyBool_Check (styling_obj));
+  string_file stb (styling_obj == Py_True);
 
   try
     {
@@ -1988,9 +1982,8 @@ convert_value_from_python (PyObject *obj)
     {
       if (PyBool_Check (obj))
 	{
-	  cmp = PyObject_IsTrue (obj);
-	  if (cmp >= 0)
-	    value = value_from_longest (builtin_type_pybool, cmp);
+	  cmp = obj == Py_True ? 1 : 0;
+	  value = value_from_longest (builtin_type_pybool, cmp);
 	}
       else if (PyLong_Check (obj))
 	{

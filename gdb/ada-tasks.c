@@ -266,7 +266,7 @@ struct ada_tasks_inferior_data
      reference it - this number is printed beside each task in the tasks
      info listing displayed by "info tasks".  This number is equal to
      its index in the vector + 1.  Reciprocally, to compute the index
-     of a task in the vector, we need to substract 1 from its number.  */
+     of a task in the vector, we need to subtract 1 from its number.  */
   std::vector<ada_task_info> task_list;
 };
 
@@ -1447,7 +1447,7 @@ ada_task_list_changed (struct inferior *inf)
 static void
 ada_tasks_invalidate_pspace_data (struct program_space *pspace)
 {
-  get_ada_tasks_pspace_data (pspace)->initialized_p = 0;
+  ada_tasks_pspace_data_handle.clear (pspace);
 }
 
 /* Invalidate the per-inferior data.  */
@@ -1455,10 +1455,7 @@ ada_tasks_invalidate_pspace_data (struct program_space *pspace)
 static void
 ada_tasks_invalidate_inferior_data (struct inferior *inf)
 {
-  struct ada_tasks_inferior_data *data = get_ada_tasks_inferior_data (inf);
-
-  data->known_tasks_kind = ADA_TASKS_UNKNOWN;
-  data->task_list_valid_p = false;
+  ada_tasks_inferior_data_handle.clear (inf);
 }
 
 /* The 'normal_stop' observer notification callback.  */

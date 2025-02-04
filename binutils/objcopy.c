@@ -1,5 +1,5 @@
 /* objcopy.c -- copy object file from input to output, optionally massaging it.
-   Copyright (C) 1991-2024 Free Software Foundation, Inc.
+   Copyright (C) 1991-2025 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -1266,34 +1266,6 @@ is_specified_symbol (const char *name, htab_t htab)
   return htab_find (htab, name) != NULL;
 }
 
-/* Return a pointer to the symbol used as a signature for GROUP.  */
-
-static asymbol *
-group_signature (asection *group)
-{
-  bfd *abfd = group->owner;
-  Elf_Internal_Shdr *ghdr;
-
-  /* PR 20089: An earlier error may have prevented us from loading the symbol table.  */
-  if (isympp == NULL)
-    return NULL;
-
-  if (bfd_get_flavour (abfd) != bfd_target_elf_flavour)
-    return NULL;
-
-  ghdr = &elf_section_data (group)->this_hdr;
-  if (ghdr->sh_link == elf_onesymtab (abfd))
-    {
-      const struct elf_backend_data *bed = get_elf_backend_data (abfd);
-      Elf_Internal_Shdr *symhdr = &elf_symtab_hdr (abfd);
-
-      if (ghdr->sh_info > 0
-	  && ghdr->sh_info < symhdr->sh_size / bed->s->sizeof_sym)
-	return isympp[ghdr->sh_info - 1];
-    }
-  return NULL;
-}
-
 /* Return TRUE if the section is a DWO section.  */
 
 static bool
@@ -1438,7 +1410,7 @@ is_strip_section (bfd *abfd ATTRIBUTE_UNUSED, asection *sec)
       const char *gname;
       asection *elt, *first;
 
-      gsym = group_signature (sec);
+      gsym = bfd_group_signature (sec, isympp);
       /* Strip groups without a valid signature.  */
       if (gsym == NULL)
 	return true;
@@ -1590,14 +1562,14 @@ filter_symbols (bfd *abfd, bfd *obfd, asymbol **osyms,
 	{
 	  char *new_name;
 
-	  if (name != NULL
-	      && name[0] == '_'
+	  if (name[0] == '_'
 	      && name[1] == '_'
 	      && strcmp (name + (name[2] == '_'), "__gnu_lto_slim") == 0)
 	    {
-	      fatal (_("redefining symbols does not work on LTO-compiled object files"));
+	      fatal (_("redefining symbols does not work"
+		       " on LTO-compiled object files"));
 	    }
-	  
+
 	  new_name = (char *) lookup_sym_redefinition (name);
 	  if (new_name == name
 	      && (flags & BSF_SECTION_SYM) != 0)
@@ -1666,7 +1638,7 @@ filter_symbols (bfd *abfd, bfd *obfd, asymbol **osyms,
 	keep = false;
       else if ((flags & BSF_KEEP) != 0		/* Used in relocation.  */
 	       || ((flags & BSF_SECTION_SYM) != 0
-		   && ((*bfd_asymbol_section (sym)->symbol_ptr_ptr)->flags
+		   && (bfd_asymbol_section (sym)->symbol->flags
 		       & BSF_KEEP) != 0))
 	{
 	  keep = true;
@@ -2956,7 +2928,7 @@ copy_object (bfd *ibfd, bfd *obfd, const bfd_arch_info_type *input_arch)
 	  pset = find_section_list (padd->name, false,
 				    SECTION_CONTEXT_SET_FLAGS);
 	  if (pset != NULL)
-	    {	      
+	    {
 	      flags = pset->flags | SEC_HAS_CONTENTS;
 	      flags = check_new_section_flags (flags, obfd, padd->name);
 	    }
@@ -3845,10 +3817,7 @@ copy_archive (bfd *ibfd, bfd *obfd, const char *output_target,
 	  if (l->obfd == NULL)
 	    rmdir (l->name);
 	  else
-	    {
-	      bfd_close (l->obfd);
-	      unlink (l->name);
-	    }
+	    unlink (l->name);
 	  free (l->name);
 	}
       next = l->next;
@@ -4401,7 +4370,7 @@ setup_section (bfd *ibfd, sec_ptr isection, bfd *obfd)
 
   if ((isection->flags & SEC_GROUP) != 0)
     {
-      asymbol *gsym = group_signature (isection);
+      asymbol *gsym = bfd_group_signature (isection, isympp);
 
       if (gsym != NULL)
 	{

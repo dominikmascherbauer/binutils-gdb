@@ -184,8 +184,13 @@ AS_HELP_STRING([--enable-targets=TARGETS], [alternative target configurations]),
   yes | "") AC_MSG_ERROR(enable-targets option must specify target names or 'all')
             ;;
   no)       enable_targets= ;;
-  *)        enable_targets=$enableval ;;
+  *)
+	enable_targets=$enableval
+	AC_DEFINE_UNQUOTED(ENABLE_TARGETS, "$enable_targets",
+			   Additional targets configured into GDB. )
+	;;
 esac])
+
 
 BFD_64_BIT
 
@@ -252,9 +257,17 @@ if test x${all_targets} = xtrue; then
   if test x${enable_64_bit_bfd} = xyes; then
     TARGET_OBS='$(ALL_TARGET_OBS) $(ALL_64_TARGET_OBS)'
   else
-    TARGET_OBS='$(ALL_TARGET_OBS)'
+    # If all targets were requested, but 64 bit bfd is not enabled,
+    # the build will fail. See PR 28684.
+    AC_MSG_ERROR([--enable-targets=all requires --enable-64-bit-bfd])
   fi
 fi
+
+HAVE_GSTACK=0
+if test $gdb_native = yes; then
+   HAVE_GSTACK=1
+fi
+AC_SUBST(HAVE_GSTACK)
 
 # AMD debugger API support.
 
@@ -797,7 +810,7 @@ else
         python_prefix=
       fi
       if test ! -x "${python_prog}"; then
-        # Fall back to gdb 7.0/7.1 behaviour.
+        # Fall back to gdb 7.0/7.1 behavior.
         python_prog=missing
         python_prefix=${with_python}
       fi
@@ -1289,20 +1302,38 @@ AC_SUBST(SRCHIGH_CFLAGS)
 # ------------------------- #
 
 AC_HEADER_STDC
-# elf_hp.h is for HP/UX 64-bit shared library support.
-AC_CHECK_HEADERS([nlist.h machine/reg.h \
-                  thread_db.h \
-		  sys/file.h sys/filio.h sys/ioctl.h sys/param.h \
-		  sys/procctl.h sys/resource.h sys/ptrace.h ptrace.h \
-		  sys/reg.h sys/debugreg.h \
-		  termios.h elf_hp.h])
+AC_CHECK_HEADERS([ \
+  machine/reg.h \
+  nlist.h \
+  ptrace.h \
+  sys/debugreg.h \
+  sys/file.h \
+  sys/filio.h \
+  sys/ioctl.h \
+  sys/param.h \
+  sys/procctl.h \
+  sys/ptrace.h \
+  sys/reg.h \
+  sys/resource.h \
+  termios.h \
+  thread_db.h \
+])
+
 AC_CHECK_HEADERS(sys/user.h, [], [],
 [#if HAVE_SYS_PARAM_H
 # include <sys/param.h>
 #endif
 ])
 
-AC_CHECK_HEADERS(curses.h cursesX.h ncurses.h ncursesw/ncurses.h ncurses/ncurses.h ncurses/term.h)
+AC_CHECK_HEADERS([ \
+  curses.h \
+  cursesX.h \
+  ncurses.h \
+  ncurses/ncurses.h \
+  ncurses/term.h \
+  ncursesw/ncurses.h \
+])
+
 AC_CHECK_HEADERS(term.h, [], [],
 [#if HAVE_CURSES_H
 # include <curses.h>
@@ -1347,13 +1378,28 @@ AC_C_BIGENDIAN
 # Checks for library functions.  #
 # ------------------------------ #
 
-AC_CHECK_FUNCS([getuid getgid \
-		pread pread64 pwrite resize_term \
-		getpgid setsid \
-		sigsetmask \
-		ttrace wresize setlocale iconvlist libiconvlist btowc \
-		setrlimit getrlimit posix_madvise waitpid \
-		use_default_colors])
+AC_CHECK_FUNCS([ \
+  btowc \
+  getgid \
+  getpgid \
+  getrlimit \
+  getuid \
+  iconvlist \
+  libiconvlist \
+  posix_madvise \
+  pread \
+  pread64 \
+  pwrite \
+  resize_term \
+  setlocale \
+  setrlimit \
+  setsid \
+  sigsetmask \
+  ttrace \
+  use_default_colors \
+  wresize \
+])
+
 AM_LANGINFO_CODESET
 
 # Check the return and argument types of ptrace.
@@ -2226,6 +2272,7 @@ GDB_AC_SELFTEST([
 GDB_AC_TRANSFORM([gdb], [GDB_TRANSFORM_NAME])
 GDB_AC_TRANSFORM([gcore], [GCORE_TRANSFORM_NAME])
 AC_CONFIG_FILES([gcore], [chmod +x gcore])
+AC_CONFIG_FILES([gstack.in:gstack-1.in])
 AC_CONFIG_FILES([Makefile gdb-gdb.gdb gdb-gdb.py doc/Makefile data-directory/Makefile])
 
 AC_OUTPUT

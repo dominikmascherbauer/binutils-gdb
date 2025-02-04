@@ -1,5 +1,5 @@
 /* Mach-O object file format
-   Copyright (C) 2009-2024 Free Software Foundation, Inc.
+   Copyright (C) 2009-2025 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -111,7 +111,7 @@ collect_16char_name (char *dest, const char *msg, int require_comma)
   {
       int len = input_line_pointer - namstart; /* could be zero.  */
       /* lose any trailing space.  */
-      while (len > 0 && namstart[len-1] == ' ')
+      while (len > 0 && is_whitespace (namstart[len-1]))
         len--;
       if (len > 16)
         {
@@ -330,7 +330,7 @@ obj_mach_o_section (int ignore ATTRIBUTE_UNUSED)
 
       len = input_line_pointer - p;
       /* strip trailing spaces.  */
-      while (len > 0 && p[len-1] == ' ')
+      while (len > 0 && is_whitespace (p[len - 1]))
 	len--;
       tmpc = p[len];
 
@@ -369,7 +369,7 @@ obj_mach_o_section (int ignore ATTRIBUTE_UNUSED)
 
 	      len = input_line_pointer - p;
 	      /* strip trailing spaces.  */
-	      while (len > 0 && p[len-1] == ' ')
+	      while (len > 0 && is_whitespace (p[len - 1]))
 		len--;
 	      tmpc = p[len];
 
@@ -471,7 +471,7 @@ obj_mach_o_zerofill (int ignore ATTRIBUTE_UNUSED)
       c = get_symbol_name (&name);
       /* Just after name is now '\0'.  */
       p = input_line_pointer;
-      *p = c;
+      restore_line_pointer (c);
 
       if (name == p)
 	{
@@ -480,7 +480,7 @@ obj_mach_o_zerofill (int ignore ATTRIBUTE_UNUSED)
 	  goto done;
 	}
 
-      SKIP_WHITESPACE_AFTER_NAME ();
+      SKIP_WHITESPACE ();
       if (*input_line_pointer == ',')
 	input_line_pointer++;
 
@@ -1128,8 +1128,8 @@ obj_mach_o_sym_qual (int ntype)
       c = get_symbol_name (&name);
       symbolP = symbol_find_or_make (name);
       obj_mach_o_set_symbol_qualifier (symbolP, ntype);
-      *input_line_pointer = c;
-      SKIP_WHITESPACE_AFTER_NAME ();
+      restore_line_pointer (c);
+      SKIP_WHITESPACE ();
       c = *input_line_pointer;
       if (c == ',')
 	{

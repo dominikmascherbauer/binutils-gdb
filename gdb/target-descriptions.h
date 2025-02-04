@@ -19,8 +19,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#ifndef TARGET_DESCRIPTIONS_H
-#define TARGET_DESCRIPTIONS_H 1
+#ifndef GDB_TARGET_DESCRIPTIONS_H
+#define GDB_TARGET_DESCRIPTIONS_H
 #include "gdbsupport/tdesc.h"
 #include "gdbarch.h"
 
@@ -219,7 +219,6 @@ int tdesc_register_in_reggroup_p (struct gdbarch *gdbarch, int regno,
 
 void set_tdesc_architecture (struct target_desc *,
 			     const struct bfd_arch_info *);
-void set_tdesc_osabi (struct target_desc *, enum gdb_osabi osabi);
 void set_tdesc_property (struct target_desc *,
 			 const char *key, const char *value);
 void tdesc_add_compatible (struct target_desc *,
@@ -237,4 +236,4 @@ void record_xml_tdesc (const char *xml_file,
 }
 #endif
 
-#endif /* TARGET_DESCRIPTIONS_H */
+#endif /* GDB_TARGET_DESCRIPTIONS_H */

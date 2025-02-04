@@ -1438,7 +1438,7 @@ arc_analyze_prologue (struct gdbarch *gdbarch, const CORE_ADDR entrypoint,
    1) Store instruction for each callee-saved register (R25 - R13 + 1)
    2) Two instructions for FP
    3) One for BLINK
-   4) Three substract instructions for SP (for variadic args, for
+   4) Three subtract instructions for SP (for variadic args, for
    callee saved regs and for local vars) and assuming that those SUB use
    long-immediate (hence double length).
    5) Stores of arguments registers are considered part of prologue too
@@ -1910,9 +1910,10 @@ arc_sigtramp_frame_sniffer (const struct frame_unwind *self,
    the fallback unwinder, we use the default frame sniffer, which always
    accepts the frame.  */
 
-static const struct frame_unwind arc_frame_unwind = {
+static const struct frame_unwind_legacy arc_frame_unwind (
   "arc prologue",
   NORMAL_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   arc_frame_this_id,
   arc_frame_prev_register,
@@ -1920,15 +1921,16 @@ static const struct frame_unwind arc_frame_unwind = {
   default_frame_sniffer,
   NULL,
   NULL
-};
+);
 
 /* Structure defining the ARC signal frame unwind functions.  Custom
    sniffer is used, because this frame must be accepted only in the right
    context.  */
 
-static const struct frame_unwind arc_sigtramp_frame_unwind = {
+static const struct frame_unwind_legacy arc_sigtramp_frame_unwind (
   "arc sigtramp",
   SIGTRAMP_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   arc_sigtramp_frame_this_id,
   arc_sigtramp_frame_prev_register,
@@ -1936,7 +1938,7 @@ static const struct frame_unwind arc_sigtramp_frame_unwind = {
   arc_sigtramp_frame_sniffer,
   NULL,
   NULL
-};
+);
 
 
 static const struct frame_base arc_normal_base = {
@@ -2117,7 +2119,7 @@ arc_check_tdesc_feature (struct tdesc_arch_data *tdesc_data,
   return true;
 }
 
-/* Check for the existance of "lp_start" and "lp_end" in target description.
+/* Check for the existence of "lp_start" and "lp_end" in target description.
    If both are present, assume there is hardware loop support in the target.
    This can be improved by looking into "lpc_size" field of "isa_config"
    auxiliary register.  */

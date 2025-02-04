@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-#   Copyright (C) 2003-2024 Free Software Foundation, Inc.
+#   Copyright (C) 2003-2025 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -231,7 +231,6 @@ replace_insn_sec_with_prop_sec (bfd *abfd,
   if (prop_sec && prop_sec->owner)
     remove_section (abfd, prop_sec);
   free (insn_contents);
-  free (internal_relocs);
 
   return false;
 }

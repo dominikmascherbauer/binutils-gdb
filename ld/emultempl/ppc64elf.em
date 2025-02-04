@@ -1,5 +1,5 @@
 # This shell script emits a C file. -*- C -*-
-# Copyright (C) 2002-2024 Free Software Foundation, Inc.
+# Copyright (C) 2002-2025 Free Software Foundation, Inc.
 #
 # This file is part of the GNU Binutils.
 #
@@ -616,7 +616,7 @@ gld${EMULATION_NAME}_finish (void)
   fflush (stderr);
   free (msg);
 
-  finish_default ();
+  ldelf_finish ();
 }
 
 

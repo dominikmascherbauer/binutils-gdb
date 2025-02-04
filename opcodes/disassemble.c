@@ -1,5 +1,5 @@
 /* Select disassembly routine for specified architecture.
-   Copyright (C) 1994-2024 Free Software Foundation, Inc.
+   Copyright (C) 1994-2025 Free Software Foundation, Inc.
 
    This file is part of the GNU opcodes library.
 
@@ -74,7 +74,6 @@
 #define ARCH_mt
 #define ARCH_msp430
 #define ARCH_nds32
-#define ARCH_nios2
 #define ARCH_ns32k
 #define ARCH_or1k
 #define ARCH_pdp11
@@ -346,14 +345,6 @@ disassembler (enum bfd_architecture a,
 #ifdef ARCH_mn10300
     case bfd_arch_mn10300:
       disassemble = print_insn_mn10300;
-      break;
-#endif
-#ifdef ARCH_nios2
-    case bfd_arch_nios2:
-      if (big)
-	disassemble = print_insn_big_nios2;
-      else
-	disassemble = print_insn_little_nios2;
       break;
 #endif
 #ifdef ARCH_or1k
@@ -776,6 +767,7 @@ disassemble_free_target (struct disassemble_info *info)
 #endif
 #ifdef ARCH_powerpc
     case bfd_arch_powerpc:
+      disassemble_free_powerpc (info);
       break;
 #endif
 #ifdef ARCH_riscv

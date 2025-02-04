@@ -1488,7 +1488,7 @@ ada_decode (const char *encoded, bool wrap, bool operators, bool wide)
       if (i < len0 + 3
 	  && encoded[i] == 'N' && encoded[i+1] == '_' && encoded[i+2] == '_')
 	{
-	  /* Backtrack a bit up until we reach either the begining of
+	  /* Backtrack a bit up until we reach either the beginning of
 	     the encoded name, or "__".  Make sure that we only find
 	     digits or lowercase characters.  */
 	  const char *ptr = encoded + i - 1;
@@ -1819,7 +1819,8 @@ desc_bounds_type (struct type *type)
 }
 
 /* If ARR is an array descriptor (fat or thin pointer), or pointer to
-   one, a pointer to its bounds data.   Otherwise NULL.  */
+   one, a pointer to its bounds data.  Otherwise, throw an
+   exception.  */
 
 static struct value *
 desc_bounds (struct value *arr)
@@ -1870,7 +1871,7 @@ desc_bounds (struct value *arr)
       return p_bounds;
     }
   else
-    return NULL;
+    error (_("Not an array"));
 }
 
 /* If TYPE is the type of an array-descriptor (fat pointer),  the bit
@@ -3424,67 +3425,45 @@ ada_decoded_op_name (enum exp_opcode op)
   error (_("Could not find operator name for opcode"));
 }
 
-/* Returns true (non-zero) iff decoded name N0 should appear before N1
-   in a listing of choices during disambiguation (see sort_choices, below).
-   The idea is that overloadings of a subprogram name from the
-   same package should sort in their source order.  We settle for ordering
-   such symbols by their trailing number (__N  or $N).  */
-
-static int
-encoded_ordered_before (const char *N0, const char *N1)
-{
-  if (N1 == NULL)
-    return 0;
-  else if (N0 == NULL)
-    return 1;
-  else
-    {
-      int k0, k1;
-
-      for (k0 = strlen (N0) - 1; k0 > 0 && isdigit (N0[k0]); k0 -= 1)
-	;
-      for (k1 = strlen (N1) - 1; k1 > 0 && isdigit (N1[k1]); k1 -= 1)
-	;
-      if ((N0[k0] == '_' || N0[k0] == '$') && N0[k0 + 1] != '\000'
-	  && (N1[k1] == '_' || N1[k1] == '$') && N1[k1 + 1] != '\000')
-	{
-	  int n0, n1;
-
-	  n0 = k0;
-	  while (N0[n0] == '_' && n0 > 0 && N0[n0 - 1] == '_')
-	    n0 -= 1;
-	  n1 = k1;
-	  while (N1[n1] == '_' && n1 > 0 && N1[n1 - 1] == '_')
-	    n1 -= 1;
-	  if (n0 == n1 && strncmp (N0, N1, n0) == 0)
-	    return (atoi (N0 + k0 + 1) < atoi (N1 + k1 + 1));
-	}
-      return (strcmp (N0, N1) < 0);
-    }
-}
-
-/* Sort SYMS[0..NSYMS-1] to put the choices in a canonical order by the
-   encoded names.  */
+/* Sort SYMS to put the choices in a canonical order by the encoded
+   names.  */
 
 static void
-sort_choices (struct block_symbol syms[], int nsyms)
+sort_choices (std::vector<struct block_symbol> &syms)
 {
-  int i;
+  std::sort (syms.begin (), syms.end (),
+	     [] (const block_symbol &a, const block_symbol &b)
+	     {
+	       if (!a.symbol->is_objfile_owned ())
+		 return true;
+	       if (!b.symbol->is_objfile_owned ())
+		 return true;
 
-  for (i = 1; i < nsyms; i += 1)
-    {
-      struct block_symbol sym = syms[i];
-      int j;
+	       const char *fna = a.symbol->symtab ()->filename;
+	       const char *fnb = b.symbol->symtab ()->filename;
 
-      for (j = i - 1; j >= 0; j -= 1)
-	{
-	  if (encoded_ordered_before (syms[j].symbol->linkage_name (),
-				      sym.symbol->linkage_name ()))
-	    break;
-	  syms[j + 1] = syms[j];
-	}
-      syms[j + 1] = sym;
-    }
+	       /* First sort by basename.  This is done because,
+		  depending on how GNAT was invoked, different sources
+		  might have relative or absolute paths, but we'd like
+		  similar ones to appear together.  */
+	       int cmp = strcmp (lbasename (fna), lbasename (fnb));
+	       if (cmp != 0)
+		 return cmp < 0;
+
+	       /* The basenames are the same, so group identical paths
+		  together.  */
+	       cmp = strcmp (fna, fnb);
+	       if (cmp != 0)
+		 return cmp < 0;
+
+	       if (a.symbol->line () < b.symbol->line ())
+		 return true;
+	       if (a.symbol->line () > b.symbol->line ())
+		 return false;
+
+	       return strcmp (a.symbol->natural_name (),
+			      b.symbol->natural_name ()) < 0;
+	     });
 }
 
 /* Whether GDB should display formals and return types for functions in the
@@ -3619,7 +3598,7 @@ get_selections (int *choices, int n_choices, int max_results,
   return n_chosen;
 }
 
-/* Given a list of NSYMS symbols in SYMS, select up to MAX_RESULTS>0
+/* Given a list symbols in SYMS, select up to MAX_RESULTS>0
    by asking the user (if necessary), returning the number selected,
    and setting the first elements of SYMS items.  Error if no symbols
    selected.  */
@@ -3628,18 +3607,16 @@ get_selections (int *choices, int n_choices, int max_results,
    to be re-integrated one of these days.  */
 
 static int
-user_select_syms (struct block_symbol *syms, int nsyms, int max_results)
+user_select_syms (std::vector<struct block_symbol> &syms, int max_results)
 {
   int i;
-  int *chosen = XALLOCAVEC (int , nsyms);
-  int n_chosen;
   int first_choice = (max_results == 1) ? 1 : 2;
   const char *select_mode = multiple_symbols_select_mode ();
 
   if (max_results < 1)
     error (_("Request to select 0 symbols!"));
-  if (nsyms <= 1)
-    return nsyms;
+  if (syms.size () <= 1)
+    return syms.size ();
 
   if (select_mode == multiple_symbols_cancel)
     error (_("\
@@ -3650,15 +3627,15 @@ See set/show multiple-symbol."));
      Only do that if more than one symbol can be selected, of course.
      Otherwise, display the menu as usual.  */
   if (select_mode == multiple_symbols_all && max_results > 1)
-    return nsyms;
+    return syms.size ();
 
   gdb_printf (_("[0] cancel\n"));
   if (max_results > 1)
     gdb_printf (_("[1] all\n"));
 
-  sort_choices (syms, nsyms);
+  sort_choices (syms);
 
-  for (i = 0; i < nsyms; i += 1)
+  for (i = 0; i < syms.size (); i += 1)
     {
       if (syms[i].symbol == NULL)
 	continue;
@@ -3698,9 +3675,11 @@ See set/show multiple-symbol."));
 	      gdb_printf ("[%d] ", i + first_choice);
 	      ada_print_symbol_signature (gdb_stdout, syms[i].symbol,
 					  &type_print_raw_options);
-	      gdb_printf (_(" at %s:%d\n"),
-			  symtab_to_filename_for_display (symtab),
-			  syms[i].symbol->line ());
+	      gdb_printf (_(" at %ps:%ps\n"),
+			  styled_string (file_name_style.style (),
+					 symtab_to_filename_for_display (symtab)),
+			  styled_string (line_number_style.style (),
+					 pulongest (syms[i].symbol->line ())));
 	    }
 	  else if (is_enumeral
 		   && syms[i].symbol->type ()->name () != NULL)
@@ -3719,9 +3698,10 @@ See set/show multiple-symbol."));
 
 	      if (symtab != NULL)
 		gdb_printf (is_enumeral
-			    ? _(" in %s (enumeral)\n")
-			    : _(" at %s:?\n"),
-			    symtab_to_filename_for_display (symtab));
+			    ? _(" in %ps (enumeral)\n")
+			    : _(" at %ps:?\n"),
+			    styled_string (file_name_style.style (),
+					   symtab_to_filename_for_display (symtab)));
 	      else
 		gdb_printf (is_enumeral
 			    ? _(" (enumeral)\n")
@@ -3730,8 +3710,10 @@ See set/show multiple-symbol."));
 	}
     }
 
-  n_chosen = get_selections (chosen, nsyms, max_results, max_results > 1,
-			     "overload-choice");
+  int *chosen = XALLOCAVEC (int , syms.size ());
+  int n_chosen = get_selections (chosen, syms.size (),
+				 max_results, max_results > 1,
+				 "overload-choice");
 
   for (i = 0; i < n_chosen; i += 1)
     syms[i] = syms[chosen[i]];
@@ -3918,7 +3900,7 @@ ada_resolve_variable (struct symbol *sym, const struct block *block,
   else
     {
       gdb_printf (_("Multiple matches for %s\n"), sym->print_name ());
-      user_select_syms (candidates.data (), candidates.size (), 1);
+      user_select_syms (candidates, 1);
       i = 0;
     }
 
@@ -4124,7 +4106,8 @@ ada_resolve_function (std::vector<struct block_symbol> &syms,
   else if (m > 1 && !parse_completion)
     {
       gdb_printf (_("Multiple matches for %s\n"), name);
-      user_select_syms (syms.data (), m, 1);
+      syms.resize (m);
+      user_select_syms (syms, 1);
       return 0;
     }
   return 0;
@@ -5428,15 +5411,12 @@ ada_add_block_renamings (std::vector<struct block_symbol> &result,
 			 const lookup_name_info &lookup_name,
 			 domain_search_flags domain)
 {
-  struct using_direct *renaming;
   int defns_mark = result.size ();
 
   symbol_name_matcher_ftype *name_match
     = ada_get_symbol_name_matcher (lookup_name);
 
-  for (renaming = block->get_using ();
-       renaming != NULL;
-       renaming = renaming->next)
+  for (using_direct *renaming : block->get_using ())
     {
       const char *r_name;
 
@@ -5818,8 +5798,8 @@ is_name_suffix (const char *str)
   /* ??? We should not modify STR directly, as we are doing below.  This
      is fine in this case, but may become problematic later if we find
      that this alternative did not work, and want to try matching
-     another one from the begining of STR.  Since we modified it, we
-     won't be able to find the begining of the string anymore!  */
+     another one from the beginning of STR.  Since we modified it, we
+     won't be able to find the beginning of the string anymore!  */
   if (str[0] == 'X')
     {
       str += 1;
@@ -10098,15 +10078,28 @@ ada_atr_tag (struct type *expect_type,
   return ada_value_tag (arg1);
 }
 
-/* A helper function for OP_ATR_SIZE.  */
+namespace expr
+{
 
 value *
-ada_atr_size (struct type *expect_type,
-	      struct expression *exp,
-	      enum noside noside, enum exp_opcode op,
-	      struct value *arg1)
+ada_atr_size_operation::evaluate (struct type *expect_type,
+				  struct expression *exp,
+				  enum noside noside)
 {
-  struct type *type = arg1->type ();
+  bool is_type = std::get<0> (m_storage)->opcode () == OP_TYPE;
+  bool is_size = std::get<1> (m_storage);
+
+  enum noside sub_noside = is_type ? EVAL_AVOID_SIDE_EFFECTS : noside;
+  value *val = std::get<0> (m_storage)->evaluate (nullptr, exp, sub_noside);
+  struct type *type = ada_check_typedef (val->type ());
+
+  if (is_type)
+    {
+      if (is_size)
+	error (_("gdb cannot apply 'Size to a type"));
+      if (is_dynamic_type (type) || find_base_type (type) != nullptr)
+	error (_("cannot apply 'Object_Size to dynamic type"));
+    }
 
   /* If the argument is a reference, then dereference its type, since
      the user is really asking for the size of the actual object,
@@ -10120,6 +10113,8 @@ ada_atr_size (struct type *expect_type,
     return value_from_longest (builtin_type (exp->gdbarch)->builtin_int,
 			       TARGET_CHAR_BIT * type->length ());
 }
+
+} /* namespace expr */
 
 /* A helper function for UNOP_ABS.  */
 
@@ -10772,7 +10767,7 @@ ada_unop_atr_operation::evaluate (struct type *expect_type,
   struct type *type_arg = nullptr;
   value *val = nullptr;
 
-  if (std::get<0> (m_storage)->opcode () == OP_TYPE)
+  if (std::get<0> (m_storage)->type_p ())
     {
       value *tem = std::get<0> (m_storage)->evaluate (nullptr, exp,
 						      EVAL_AVOID_SIDE_EFFECTS);
@@ -13643,7 +13638,7 @@ public:
 
     for (b = get_selected_block (0); b != NULL; b = b->superblock ())
       {
-	if (!b->superblock ())
+	if (b->is_static_block ())
 	  surrounding_static_block = b;   /* For elmin of dups */
 
 	for (struct symbol *sym : block_iterator_range (b))
@@ -13806,8 +13801,15 @@ public:
 		 const char *encoding, int force_ellipses,
 		 const struct value_print_options *options) const override
   {
-    ada_printstr (stream, elttype, string, length, encoding,
-		  force_ellipses, options);
+    /* ada_printstr doesn't handle UTF-8 too well, but we want this
+       for lazy-string printing.  Defer this case to the generic
+       code.  */
+    if (encoding != nullptr && strcasecmp (encoding, "UTF-8") == 0)
+      generic_printstr (stream, elttype, string, length, encoding,
+			force_ellipses, '"', 0, options);
+    else
+      ada_printstr (stream, elttype, string, length, encoding,
+		    force_ellipses, options);
   }
 
   /* See language.h.  */
@@ -13939,11 +13941,11 @@ this option to \"off\" unless necessary."),
 
   add_setshow_boolean_cmd ("print-signatures", class_vars,
 			   &print_signatures, _("\
-Enable or disable the output of formal and return types for functions in the \
-overloads selection menu."), _("\
-Show whether the output of formal and return types for functions in the \
-overloads selection menu is activated."),
-			   NULL, NULL, NULL, &set_ada_list, &show_ada_list);
+Control the display of functions in overloads selection menu."), _("\
+Show how functions in overloads selection menu will be displayed."),
+			   _("\
+When enabled, formal and return types are shown."),
+			   NULL, NULL, &set_ada_list, &show_ada_list);
 
   ada_source_charset = gnat_source_charsets[0];
   add_setshow_enum_cmd ("source-charset", class_files,

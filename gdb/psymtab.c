@@ -527,6 +527,12 @@ print_partial_symbols (struct gdbarch *gdbarch, struct objfile *objfile,
 	case COMMON_BLOCK_DOMAIN:
 	  gdb_puts ("common block domain, ", outfile);
 	  break;
+	case TYPE_DOMAIN:
+	  gdb_puts ("type domain, ", outfile);
+	  break;
+	case FUNCTION_DOMAIN:
+	  gdb_puts ("function domain, ", outfile);
+	  break;
 	default:
 	  gdb_puts ("<invalid domain>, ", outfile);
 	  break;
@@ -1560,7 +1566,8 @@ Usage: mt print psymbols [-objfile OBJFILE] [-pc ADDRESS] [--] [OUTFILE]\n\
        mt print psymbols [-objfile OBJFILE] [-source SOURCE] [--] [OUTFILE]\n\
 Entries in the partial symbol table are dumped to file OUTFILE,\n\
 or the terminal if OUTFILE is unspecified.\n\
-If ADDRESS is provided, dump only the symbols for the file with code at that address.\n\
+If ADDRESS is provided, dump only the symbols for the file\n\
+with code at that address.\n\
 If SOURCE is provided, dump only that file's symbols.\n\
 If OBJFILE is provided, dump only that object file's symbols."),
 	   &maintenanceprintlist);
@@ -1571,8 +1578,8 @@ This does not include information about individual partial symbols,\n\
 just the symbol table structures themselves."),
 	   &maintenanceinfolist);
 
-  add_cmd ("check-psymtabs", class_maintenance, maintenance_check_psymtabs,
+  add_cmd ("psymtabs", class_maintenance, maintenance_check_psymtabs,
 	   _("\
 Check consistency of currently expanded psymtabs versus symtabs."),
-	   &maintenancelist);
+	   &maintenancechecklist);
 }

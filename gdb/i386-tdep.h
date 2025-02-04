@@ -17,8 +17,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#ifndef I386_TDEP_H
-#define I386_TDEP_H
+#ifndef GDB_I386_TDEP_H
+#define GDB_I386_TDEP_H
 
 #include "gdbarch.h"
 #include "infrun.h"
@@ -325,6 +325,7 @@ enum record_i386_regnum
   X86_RECORD_ES_REGNUM,
   X86_RECORD_FS_REGNUM,
   X86_RECORD_GS_REGNUM,
+  X86_RECORD_XMM0_REGNUM,
 };
 
 #define I386_NUM_GREGS	16
@@ -468,4 +469,4 @@ extern int i386_stap_is_single_operand (struct gdbarch *gdbarch,
 extern expr::operation_up i386_stap_parse_special_token
      (struct gdbarch *gdbarch, struct stap_parse_info *p);
 
-#endif /* i386-tdep.h */
+#endif /* GDB_I386_TDEP_H */

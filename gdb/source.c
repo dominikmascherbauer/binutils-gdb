@@ -17,6 +17,7 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "arch-utils.h"
+#include "gdbsupport/gdb_vecs.h"
 #include "symtab.h"
 #include "expression.h"
 #include "language.h"
@@ -27,6 +28,7 @@
 #include "value.h"
 #include "gdbsupport/filestuff.h"
 
+#include <list>
 #include <sys/types.h>
 #include <fcntl.h>
 #include "gdbcore.h"
@@ -300,8 +302,26 @@ set_current_source_symtab_and_line (const symtab_and_line &sal)
 void
 clear_current_source_symtab_and_line (program_space *pspace)
 {
-  current_source_location *loc = get_source_location (pspace);
+  current_source_location *loc = current_source_key.get (pspace);
+  if (loc == nullptr)
+    return;
+
   loc->set (nullptr, 0);
+}
+
+/* Reset any information stored about a default file and line to print, if it's
+   owned by OBJFILE.  */
+
+void
+clear_current_source_symtab_and_line (objfile *objfile)
+{
+  current_source_location *loc = current_source_key.get (objfile->pspace ());
+  if (loc == nullptr)
+    return;
+
+  if (loc->symtab () != nullptr
+      && loc->symtab ()->compunit ()->objfile () == objfile)
+    clear_current_source_symtab_and_line (objfile->pspace ());
 }
 
 /* See source.h.  */
@@ -739,7 +759,7 @@ prepare_path_for_appending (const char *path)
    using mode MODE in the calls to open.  You cannot use this function to
    create files (O_CREAT).
 
-   OPTS specifies the function behaviour in specific cases.
+   OPTS specifies the function behavior in specific cases.
 
    If OPF_TRY_CWD_FIRST, try to open ./STRING before searching PATH.
    (ie pretend the first element of PATH is ".").  This also indicates
@@ -770,7 +790,8 @@ prepare_path_for_appending (const char *path)
     >>>>  eg executable, non-directory.  */
 int
 openp (const char *path, openp_flags opts, const char *string,
-       int mode, gdb::unique_xmalloc_ptr<char> *filename_opened)
+       int mode, gdb::unique_xmalloc_ptr<char> *filename_opened,
+       const char *cwd)
 {
   int fd;
   char *filename;
@@ -851,14 +872,14 @@ openp (const char *path, openp_flags opts, const char *string,
 	  int newlen;
 
 	  /* First, realloc the filename buffer if too short.  */
-	  len = strlen (current_directory);
+	  len = strlen (cwd);
 	  newlen = len + strlen (string) + 2;
 	  if (newlen > alloclen)
 	    {
 	      alloclen = newlen;
 	      filename = (char *) alloca (alloclen);
 	    }
-	  strcpy (filename, current_directory);
+	  strcpy (filename, cwd);
 	}
       else if (strchr(dir, '~'))
 	{
@@ -921,7 +942,7 @@ done:
 	*filename_opened = gdb_realpath (filename);
       else
 	*filename_opened
-	  = make_unique_xstrdup (gdb_abspath (filename).c_str ());
+	  = make_unique_xstrdup (gdb_abspath (filename, cwd).c_str ());
     }
 
   errno = last_errno;
@@ -929,7 +950,7 @@ done:
 }
 
 
-/* This is essentially a convenience, for clients that want the behaviour
+/* This is essentially a convenience, for clients that want the behavior
    of openp, using source_path, but that really don't want the file to be
    opened but want instead just to know what the full pathname is (as
    qualified against source_path).
@@ -1386,7 +1407,9 @@ print_source_lines_base (struct symtab *s, int line, int stopline,
       last_line_listed = loc->line ();
       if (flags & PRINT_SOURCE_LINES_FILENAME)
 	{
-	  uiout->text (symtab_to_filename_for_display (s));
+	  uiout->message ("%ps",
+			  styled_string (file_name_style.style (),
+					 symtab_to_filename_for_display (s)));
 	  uiout->text (":");
 	}
 
@@ -1553,10 +1576,11 @@ info_line_command (const char *arg, int from_tty)
 
 	  if (start_pc == end_pc)
 	    {
-	      gdb_printf ("Line %ps of \"%s\"",
+	      gdb_printf ("Line %ps of \"%ps\"",
 			  styled_string (line_number_style.style (),
 					 pulongest (sal.line)),
-			  symtab_to_filename_for_display (sal.symtab));
+			  styled_string (file_name_style.style (),
+					 symtab_to_filename_for_display (sal.symtab)));
 	      gdb_stdout->wrap_here (2);
 	      gdb_printf (" is at address ");
 	      print_address (gdbarch, start_pc, gdb_stdout);
@@ -1565,10 +1589,11 @@ info_line_command (const char *arg, int from_tty)
 	    }
 	  else
 	    {
-	      gdb_printf ("Line %ps of \"%s\"",
+	      gdb_printf ("Line %ps of \"%ps\"",
 			  styled_string (line_number_style.style (),
 					 pulongest (sal.line)),
-			  symtab_to_filename_for_display (sal.symtab));
+			  styled_string (file_name_style.style (),
+					 symtab_to_filename_for_display (sal.symtab)));
 	      gdb_stdout->wrap_here (2);
 	      gdb_printf (" starts at address ");
 	      print_address (gdbarch, start_pc, gdb_stdout);
@@ -1593,10 +1618,11 @@ info_line_command (const char *arg, int from_tty)
 	/* Is there any case in which we get here, and have an address
 	   which the user would want to see?  If we have debugging symbols
 	   and no line numbers?  */
-	gdb_printf (_("Line number %ps is out of range for \"%s\".\n"),
+	gdb_printf (_("Line number %ps is out of range for \"%ps\".\n"),
 		    styled_string (line_number_style.style (),
 				   pulongest (sal.line)),
-		    symtab_to_filename_for_display (sal.symtab));
+		    styled_string (file_name_style.style (),
+				   symtab_to_filename_for_display (sal.symtab)));
     }
 }
 
@@ -1883,22 +1909,6 @@ source_lines_range::source_lines_range (int startline,
     }
 }
 
-/* Handle the "set source" base command.  */
-
-static void
-set_source (const char *arg, int from_tty)
-{
-  help_list (setsourcelist, "set source ", all_commands, gdb_stdout);
-}
-
-/* Handle the "show source" base command.  */
-
-static void
-show_source (const char *args, int from_tty)
-{
-  help_list (showsourcelist, "show source ", all_commands, gdb_stdout);
-}
-
 
 void _initialize_source ();
 void
@@ -2019,13 +2029,12 @@ By default, relative filenames are displayed."),
 			show_filename_display_string,
 			&setlist, &showlist);
 
-  add_prefix_cmd ("source", no_class, set_source,
-		  _("Generic command for setting how sources are handled."),
-		  &setsourcelist, 0, &setlist);
-
-  add_prefix_cmd ("source", no_class, show_source,
-		  _("Generic command for showing source settings."),
-		  &showsourcelist, 0, &showlist);
+  add_setshow_prefix_cmd
+    ("source", no_class,
+     _("Generic command for setting how sources are handled."),
+     _("Generic command for showing source settings."),
+     &setsourcelist, &showsourcelist,
+     &setlist, &showlist);
 
   add_setshow_boolean_cmd ("open", class_files, &source_open, _("\
 Set whether GDB should open source files."), _("\

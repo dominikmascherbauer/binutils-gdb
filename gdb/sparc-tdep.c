@@ -380,7 +380,7 @@ static const char * const sparc32_register_names[] =
 #define SPARC32_NUM_REGS ARRAY_SIZE (sparc32_register_names)
 
 /* We provide the aliases %d0..%d30 for the floating registers as
-   "psuedo" registers.  */
+   "pseudo" registers.  */
 
 static const char * const sparc32_pseudo_register_names[] =
 {
@@ -769,7 +769,7 @@ sparc_alloc_frame_cache (void)
   return cache;
 }
 
-/* GCC generates several well-known sequences of instructions at the begining
+/* GCC generates several well-known sequences of instructions at the beginning
    of each function prologue when compiling with -fstack-check.  If one of
    such sequences starts at START_PC, then return the address of the
    instruction immediately past this sequence.  Otherwise, return START_PC.  */
@@ -1346,16 +1346,16 @@ sparc32_frame_prev_register (const frame_info_ptr &this_frame,
   return frame_unwind_got_register (this_frame, regnum, regnum);
 }
 
-static const struct frame_unwind sparc32_frame_unwind =
-{
+static const struct frame_unwind_legacy sparc32_frame_unwind (
   "sparc32 prologue",
   NORMAL_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   sparc32_frame_this_id,
   sparc32_frame_prev_register,
   NULL,
   default_frame_sniffer
-};
+);
 
 
 static CORE_ADDR
@@ -2092,7 +2092,6 @@ sparc32_supply_gregset (const struct sparc_gregmap *gregmap,
 			int regnum, const void *gregs)
 {
   const gdb_byte *regs = (const gdb_byte *) gregs;
-  gdb_byte zero[4] = { 0 };
   int i;
 
   if (regnum == SPARC32_PSR_REGNUM || regnum == -1)
@@ -2108,7 +2107,7 @@ sparc32_supply_gregset (const struct sparc_gregmap *gregmap,
     regcache->raw_supply (SPARC32_Y_REGNUM, regs + gregmap->r_y_offset);
 
   if (regnum == SPARC_G0_REGNUM || regnum == -1)
-    regcache->raw_supply (SPARC_G0_REGNUM, &zero);
+    regcache->raw_supply_zeroed (SPARC_G0_REGNUM);
 
   if ((regnum >= SPARC_G1_REGNUM && regnum <= SPARC_O7_REGNUM) || regnum == -1)
     {

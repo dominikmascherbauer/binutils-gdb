@@ -1,5 +1,5 @@
 /* aarch64-opc.h -- Header file for aarch64-opc.c and aarch64-opc-2.c.
-   Copyright (C) 2012-2024 Free Software Foundation, Inc.
+   Copyright (C) 2012-2025 Free Software Foundation, Inc.
    Contributed by ARM Ltd.
 
    This file is part of the GNU opcodes library.
@@ -63,9 +63,7 @@ enum aarch64_field_kind
   FLD_SME_ZAda_1b,
   FLD_SME_ZAda_2b,
   FLD_SME_ZAda_3b,
-  FLD_SME_ZdnT,
   FLD_SME_Zdn2,
-  FLD_SME_Zdn2_0,
   FLD_SME_Zdn4,
   FLD_SME_Zm,
   FLD_SME_Zm2,
@@ -298,6 +296,7 @@ verify_constraints (const struct aarch64_inst *, const aarch64_insn, bfd_vma,
 #define OPD_F_SHIFT_BY_4	0x00000800	/* Need to left shift the field
 						   value by 4 to get the value
 						   of an immediate operand.  */
+#define OPD_F_UNSIGNED		0x00001000	/* Expect an unsigned value.  */
 
 
 /* Register flags.  */
@@ -402,6 +401,12 @@ operand_need_shift_by_four (const aarch64_operand *operand)
 }
 
 static inline bool
+operand_need_unsigned_offset (const aarch64_operand *operand)
+{
+  return (operand->flags & OPD_F_UNSIGNED) != 0;
+}
+
+static inline bool
 operand_maybe_stack_pointer (const aarch64_operand *operand)
 {
   return (operand->flags & OPD_F_MAYBE_SP) != 0;
@@ -442,7 +447,7 @@ get_operand_from_code (enum aarch64_opnd code)
 
 /* Operand qualifier and operand constraint checking.  */
 
-int aarch64_match_operands_constraint (aarch64_inst *,
+bool aarch64_match_operands_constraint (aarch64_inst *,
 				       aarch64_operand_error *);
 
 /* Operand qualifier related functions.  */

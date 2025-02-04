@@ -1,5 +1,5 @@
 /* dlltool.c -- tool to generate stuff for PE style DLLs
-   Copyright (C) 1995-2024 Free Software Foundation, Inc.
+   Copyright (C) 1995-2025 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -271,16 +271,8 @@
 #define PAGE_MASK ((bfd_vma) (- COFF_PAGE_SIZE))
 #endif
 
-/* Get current BFD error message.  */
-#define bfd_get_errmsg() (bfd_errmsg (bfd_get_error ()))
-
-/* Forward references.  */
-static char *look_for_prog (const char *, const char *, int);
-static char *deduce_name (const char *);
-
-#ifdef DLLTOOL_MCORE_ELF
-static void mcore_elf_cache_filename (const char *);
-static void mcore_elf_gen_out_file (void);
+#ifndef NAME_MAX
+#define NAME_MAX	255
 #endif
 
 #ifdef HAVE_SYS_WAIT_H
@@ -402,11 +394,7 @@ static int dll_name_set_by_exp_name;
 static int add_indirect = 0;
 static int add_underscore = 0;
 static int add_stdcall_underscore = 0;
-/* This variable can hold three different values. The value
-   -1 (default) means that default underscoring should be used,
-   zero means that no underscoring should be done, and one
-   indicates that underscoring should be done.  */
-static int leading_underscore = -1;
+static char *leading_underscore = NULL;
 static int dontdeltemps = 0;
 
 /* TRUE if we should export all symbols.  Otherwise, we only export
@@ -486,9 +474,6 @@ static char * mcore_elf_linker_flags = NULL;
 #ifndef DRECTVE_SECTION_NAME
 #define DRECTVE_SECTION_NAME ".drectve"
 #endif
-
-/* What's the right name for this ?  */
-#define PATHMAX 250
 
 /* External name alias numbering starts here.  */
 #define PREFIX_ALIAS_BASE	20000
@@ -809,14 +794,27 @@ struct string_list
 
 static struct string_list *excludes;
 
+/* Forward references.  */
+static char *deduce_name (const char *);
 static const char *xlate (const char *);
-static bfd *make_delay_head (void);
 static void dll_name_list_free_contents (dll_name_list_node_type *);
 static void identify_search_archive
   (bfd *, void (*) (bfd *, bfd *, void *),  void *);
 static void identify_search_member (bfd *, bfd *, void *);
 static void identify_search_section (bfd *, asection *, void *);
 static void inform (const char *, ...) ATTRIBUTE_PRINTF_1;
+
+#ifdef DLLTOOL_MCORE_ELF
+static void mcore_elf_cache_filename (const char *);
+static void mcore_elf_gen_out_file (void);
+#endif
+
+/* Get current BFD error message.  */
+static inline const char *
+bfd_get_errmsg (void)
+{
+  return bfd_errmsg (bfd_get_error ());
+}
 
 static char *
 prefix_encode (char *start, unsigned code)
@@ -907,33 +905,12 @@ rvabefore (int mach)
 }
 
 static const char *
-asm_prefix (int mach, const char *name)
+asm_prefix (const char *name)
 {
-  switch (mach)
-    {
-    case MARM:
-    case MTHUMB:
-    case MARM_INTERWORK:
-    case MMCORE_BE:
-    case MMCORE_LE:
-    case MMCORE_ELF:
-    case MMCORE_ELF_LE:
-    case MARM_WINCE:
-    case MAARCH64:
-      break;
-    case M386:
-    case MX86:
-      /* Symbol names starting with ? do not have a leading underscore. */
-      if ((name && *name == '?') || leading_underscore == 0)
-	break;
-      else
-	return "_";
-    default:
-      /* xgettext:c-format */
-      fatal (_("Internal error: Unknown machine type: %d"), mach);
-      break;
-    }
-  return "";
+  /* Symbol names starting with ? do not have a leading underscore.  */
+  if (name && *name == '?')
+    return "";
+  return leading_underscore;
 }
 
 #define ASM_BYTE		mtable[machine].how_byte
@@ -947,7 +924,7 @@ asm_prefix (int mach, const char *name)
 #define ASM_ALIGN_SHORT		mtable[machine].how_align_short
 #define ASM_RVA_BEFORE		rvabefore (machine)
 #define ASM_RVA_AFTER		rvaafter (machine)
-#define ASM_PREFIX(NAME)	asm_prefix (machine, (NAME))
+#define ASM_PREFIX(NAME)	asm_prefix (NAME)
 #define ASM_ALIGN_LONG  	mtable[machine].how_align_long
 #define HOW_BFD_READ_TARGET	0  /* Always default.  */
 #define HOW_BFD_WRITE_TARGET	mtable[machine].how_bfd_target
@@ -1500,7 +1477,7 @@ add_excludes (const char *new_excludes)
       if (*exclude_string == '@')
 	sprintf (new_exclude->string, "%s", exclude_string);
       else
-	sprintf (new_exclude->string, "%s%s", !leading_underscore ? "" : "_",
+	sprintf (new_exclude->string, "%s%s", leading_underscore,
 		 exclude_string);
       new_exclude->next = excludes;
       excludes = new_exclude;
@@ -2150,11 +2127,10 @@ gen_exp_file (void)
 	    if (create_compat_implib)
 	      fprintf (f, "\t%s\t__imp_%s\n", ASM_GLOBAL, exp->name);
 	    fprintf (f, "\t%s\t_imp_%s%s\n", ASM_GLOBAL,
-		     !leading_underscore ? "" : "_", exp->name);
+		     leading_underscore, exp->name);
 	    if (create_compat_implib)
 	      fprintf (f, "__imp_%s:\n", exp->name);
-	    fprintf (f, "_imp_%s%s:\n",
-		     !leading_underscore ? "" : "_", exp->name);
+	    fprintf (f, "_imp_%s%s:\n", leading_underscore, exp->name);
 	    fprintf (f, "\t%s\t%s\n", ASM_LONG, exp->name);
 	  }
     }
@@ -2804,7 +2780,7 @@ make_head (void)
   return abfd;
 }
 
-bfd *
+static bfd *
 make_delay_head (void)
 {
   FILE *f = fopen (TMP_HEAD_S, FOPEN_WT);
@@ -3032,13 +3008,6 @@ gen_lib_file (int delay)
 
   if (! bfd_close (outarch))
     bfd_fatal (imp_name);
-
-  while (head != NULL)
-    {
-      bfd *n = head->archive_next;
-      bfd_close (head);
-      head = n;
-    }
 
   /* Delete all the temp files.  */
   unlink_temp_files ();
@@ -3346,21 +3315,25 @@ identify_search_archive (bfd * abfd,
 			 void (* operation) (bfd *, bfd *, void *),
 			 void * user_storage)
 {
-  bfd *   arfile = NULL;
-  bfd *   last_arfile = NULL;
-  char ** matching;
+  bfd *last_arfile = NULL;
 
   while (1)
     {
-      arfile = bfd_openr_next_archived_file (abfd, arfile);
-
-      if (arfile == NULL)
+      bfd *arfile = bfd_openr_next_archived_file (abfd, last_arfile);
+      if (arfile == NULL
+	  || arfile == last_arfile)
 	{
+	  if (arfile != NULL)
+	    bfd_set_error (bfd_error_malformed_archive);
 	  if (bfd_get_error () != bfd_error_no_more_archived_files)
 	    bfd_fatal (bfd_get_filename (abfd));
 	  break;
 	}
 
+      if (last_arfile != NULL)
+	bfd_close (last_arfile);
+
+      char **matching;
       if (bfd_check_format_matches (arfile, bfd_object, &matching))
 	(*operation) (arfile, abfd, user_storage);
       else
@@ -3369,24 +3342,11 @@ identify_search_archive (bfd * abfd,
 	  free (matching);
 	}
 
-      if (last_arfile != NULL)
-	{
-	  bfd_close (last_arfile);
-	  /* PR 17512: file: 8b2168d4.  */
-	  if (last_arfile == arfile)
-	    {
-	      last_arfile = NULL;
-	      break;
-	    }
-	}
-
       last_arfile = arfile;
     }
 
   if (last_arfile != NULL)
-    {
-      bfd_close (last_arfile);
-    }
+    bfd_close (last_arfile);
 }
 
 /* Call the identify_search_section() function for each section of this
@@ -3874,10 +3834,10 @@ main (int ac, char **av)
 	  add_stdcall_underscore = 1;
 	  break;
 	case OPTION_NO_LEADING_UNDERSCORE:
-	  leading_underscore = 0;
+	  leading_underscore = "";
 	  break;
 	case OPTION_LEADING_UNDERSCORE:
-	  leading_underscore = 1;
+	  leading_underscore = "_";
 	  break;
 	case OPTION_IDENTIFY_STRICT:
 	  identify_strict = 1;
@@ -4008,12 +3968,18 @@ main (int ac, char **av)
 		    || strcmp (mname, "arm64") == 0);
 
   /* Check the default underscore */
-  int u = leading_underscore; /* Underscoring mode. -1 for use default.  */
-  if (u == -1)
-    bfd_get_target_info (mtable[machine].how_bfd_target, NULL,
-			 NULL, &u, NULL);
-  if (u != -1)
-    leading_underscore = u != 0;
+  if (leading_underscore == NULL)
+    {
+      int u;
+      static char underscore[2];
+      bfd_get_target_info (mtable[machine].how_bfd_target, NULL,
+			   NULL, &u, NULL);
+      if (u == -1)
+	u = 0;
+      underscore[0] = u;
+      underscore[1] = 0;
+      leading_underscore = underscore;
+    }
 
   if (!dll_name && exp_name)
     {

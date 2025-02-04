@@ -1389,7 +1389,7 @@ rs6000_fetch_instruction (struct gdbarch *gdbarch, const CORE_ADDR pc)
   return op;
 }
 
-/* GCC generates several well-known sequences of instructions at the begining
+/* GCC generates several well-known sequences of instructions at the beginning
    of each function prologue when compiling with -fstack-check.  If one of
    such sequences starts at START_PC, then return the address of the
    instruction immediately past this sequence.  Otherwise, return START_PC.  */
@@ -2163,7 +2163,7 @@ skip_prologue (struct gdbarch *gdbarch, CORE_ADDR pc, CORE_ADDR lim_pc,
      this might be a call to an initializer in main(), introduced by gcc2.
      We'd like to skip over it as well.  Fortunately, xlc does some extra
      work before calling a function right after a prologue, thus we can
-     single out such gcc2 behaviour.  */
+     single out such gcc2 behavior.  */
 
 
   if ((op & 0xfc000001) == 0x48000001)
@@ -3528,7 +3528,7 @@ struct ppc_variant
     const struct target_desc **tdesc;
   };
 
-static struct ppc_variant variants[] =
+static const ppc_variant variants[] =
 {
   {"powerpc", "PowerPC user-level", bfd_arch_powerpc,
    bfd_mach_ppc, &tdesc_powerpc_altivec32},
@@ -3837,16 +3837,16 @@ rs6000_frame_prev_register (const frame_info_ptr &this_frame,
   return trad_frame_get_prev_register (this_frame, info->saved_regs, regnum);
 }
 
-static const struct frame_unwind rs6000_frame_unwind =
-{
+static const struct frame_unwind_legacy rs6000_frame_unwind (
   "rs6000 prologue",
   NORMAL_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   rs6000_frame_this_id,
   rs6000_frame_prev_register,
   NULL,
   default_frame_sniffer
-};
+);
 
 /* Allocate and initialize a frame cache for an epilogue frame.
    SP is restored and prev-PC is stored in LR.  */
@@ -3978,15 +3978,15 @@ rs6000_epilogue_frame_sniffer (const struct frame_unwind *self,
 /* Frame unwinder for epilogue frame.  This is required for reverse step-over
    a function without debug information.  */
 
-static const struct frame_unwind rs6000_epilogue_frame_unwind =
-{
+static const struct frame_unwind_legacy rs6000_epilogue_frame_unwind (
   "rs6000 epilogue",
   NORMAL_FRAME,
+  FRAME_UNWIND_ARCH,
   default_frame_unwind_stop_reason,
   rs6000_epilogue_frame_this_id, rs6000_epilogue_frame_prev_register,
   NULL,
   rs6000_epilogue_frame_sniffer
-};
+);
 
 
 static CORE_ADDR
@@ -4298,7 +4298,7 @@ ppc_record_ACC_fpscr (struct regcache *regcache, ppc_gdbarch_tdep *tdep,
 	 ACC[7][3] -> VSR[31]
 
      NOTE:
-     In ISA 3.1 the ACC is mapped on top of VSR[0] thru VSR[31].
+     In ISA 3.1 the ACC is mapped on top of VSR[0] through VSR[31].
 
      In the future, the ACC may be implemented as an independent register file
      rather than mapping on top of the VSRs.  This will then require the ACC to

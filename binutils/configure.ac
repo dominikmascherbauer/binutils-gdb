@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 dnl
-dnl   Copyright (C) 2012-2024 Free Software Foundation, Inc.
+dnl   Copyright (C) 2012-2025 Free Software Foundation, Inc.
 dnl
 dnl This file is free software; you can redistribute it and/or modify
 dnl it under the terms of the GNU General Public License as published by
@@ -279,7 +279,7 @@ if test $bu_cv_header_utime_h = yes; then
   AC_DEFINE(HAVE_GOOD_UTIME_H, 1, [Does <utime.h> define struct utimbuf?])
 fi
 
-AC_CHECK_DECLS([asprintf, environ, getc_unlocked, stpcpy, strnlen])
+AC_CHECK_DECLS([environ, getc_unlocked, stpcpy, strnlen])
 
 # Link in zlib/zstd if we can.  This allows us to read compressed debug
 # sections.  This is used only by readelf.c (objdump uses bfd for

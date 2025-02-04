@@ -1,6 +1,6 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright (C) 2012-2024 Free Software Foundation, Inc.
+#   Copyright (C) 2012-2025 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -59,3 +59,13 @@ MAINTAINERCLEANFILES = gprofng.info $(man_MANS)
 EXTRA_DIST = $(man_MANS) version.texi
 
 info: $(man_MANS)
+
+examples.tar.gz:
+	$(AM_V_at)( tar czf $@ $(srcdir)/../examples )
+
+.PHONY: install-data-local
+
+install-data-local:  examples.tar.gz
+	$(mkinstalldirs) $(DESTDIR)$(docdir)/gprofng
+	$(INSTALL_DATA) examples.tar.gz $(DESTDIR)$(docdir)/gprofng
+

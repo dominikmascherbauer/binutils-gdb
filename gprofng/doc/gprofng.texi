@@ -323,7 +323,7 @@ recommend to search for @code{gprofng-gui} how to obtain, install and use it.
 @ManPageStart{SEE ALSO}
 @c man begin SEEALSO
 
-gp-archive(1),
+gprofng-archive(1),
 gprofng-collect-app(1),
 @c -- gprofng-display-gui(1),
 gprofng-display-html(1),
@@ -358,7 +358,7 @@ command @command{info gprofng} should give access to this document.
 @ManPageStart{COPYRIGHT}
 @c man begin COPYRIGHT
 
-Copyright @copyright{} 2022-2024 Free Software Foundation, Inc.
+Copyright @copyright{} 2022-2025 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3

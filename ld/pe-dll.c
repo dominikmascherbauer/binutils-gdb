@@ -1,5 +1,5 @@
 /* Routines to help build PEI-format DLLs (Win32 etc)
-   Copyright (C) 1998-2024 Free Software Foundation, Inc.
+   Copyright (C) 1998-2025 Free Software Foundation, Inc.
    Written by DJ Delorie <dj@cygnus.com>
 
    This file is part of the GNU Binutils.
@@ -382,6 +382,8 @@ static const autofilter_entry_type autofilter_liblist[] =
   { STRING_COMMA_LEN ("libmsvcrt-os") },
   { STRING_COMMA_LEN ("libucrt") },
   { STRING_COMMA_LEN ("libucrtbase") },
+  { STRING_COMMA_LEN ("libpthread") },
+  { STRING_COMMA_LEN ("libwinpthread") },
   { NULL, 0 }
 };
 
@@ -2125,12 +2127,7 @@ make_head (bfd *parent)
   char *oname;
   bfd *abfd;
 
-  if (asprintf (&oname, "%s_d%06d.o", dll_symname, tmp_seq) < 4)
-    /* In theory we should return NULL here at let our caller decide what to
-       do.  But currently the return value is not checked, just used, and
-       besides, this condition only happens when the system has run out of
-       memory.  So just give up.  */
-    exit (EXIT_FAILURE);
+  oname = xasprintf ("%s_d%06d.o", dll_symname, tmp_seq);
   tmp_seq++;
 
   abfd = bfd_create (oname, parent);
@@ -2219,12 +2216,7 @@ make_tail (bfd *parent)
   char *oname;
   bfd *abfd;
 
-  if (asprintf (&oname, "%s_d%06d.o", dll_symname, tmp_seq) < 4)
-    /* In theory we should return NULL here at let our caller decide what to
-       do.  But currently the return value is not checked, just used, and
-       besides, this condition only happens when the system has run out of
-       memory.  So just give up.  */
-    exit (EXIT_FAILURE);
+  oname = xasprintf ("%s_d%06d.o", dll_symname, tmp_seq);
   tmp_seq++;
 
   abfd = bfd_create (oname, parent);
@@ -2412,12 +2404,7 @@ make_one (def_file_export *exp, bfd *parent, bool include_jmp_stub)
 	}
     }
 
-  if (asprintf (&oname, "%s_d%06d.o", dll_symname, tmp_seq) < 4)
-    /* In theory we should return NULL here at let our caller decide what to
-       do.  But currently the return value is not checked, just used, and
-       besides, this condition only happens when the system has run out of
-       memory.  So just give up.  */
-    exit (EXIT_FAILURE);
+  oname = xasprintf ("%s_d%06d.o", dll_symname, tmp_seq);
   tmp_seq++;
 
   abfd = bfd_create (oname, parent);
@@ -2600,12 +2587,7 @@ make_singleton_name_thunk (const char *import, bfd *parent)
   char *oname;
   bfd *abfd;
 
-  if (asprintf (&oname, "%s_nmth%06d.o", dll_symname, tmp_seq) < 4)
-    /* In theory we should return NULL here at let our caller decide what to
-       do.  But currently the return value is not checked, just used, and
-       besides, this condition only happens when the system has run out of
-       memory.  So just give up.  */
-    exit (EXIT_FAILURE);
+  oname = xasprintf ("%s_nmth%06d.o", dll_symname, tmp_seq);
   tmp_seq++;
 
   abfd = bfd_create (oname, parent);
@@ -2681,12 +2663,7 @@ make_import_fixup_entry (const char *name,
   char *oname;
   bfd *abfd;
 
-  if (asprintf (&oname, "%s_fu%06d.o", dll_symname, tmp_seq) < 4)
-    /* In theory we should return NULL here at let our caller decide what to
-       do.  But currently the return value is not checked, just used, and
-       besides, this condition only happens when the system has run out of
-       memory.  So just give up.  */
-    exit (EXIT_FAILURE);
+  oname = xasprintf ("%s_fu%06d.o", dll_symname, tmp_seq);
   tmp_seq++;
 
   abfd = bfd_create (oname, parent);
@@ -2740,12 +2717,7 @@ make_runtime_pseudo_reloc (const char *name ATTRIBUTE_UNUSED,
   bfd *abfd;
   bfd_size_type size;
 
-  if (asprintf (&oname, "%s_rtr%06d.o", dll_symname, tmp_seq) < 4)
-    /* In theory we should return NULL here at let our caller decide what to
-       do.  But currently the return value is not checked, just used, and
-       besides, this condition only happens when the system has run out of
-       memory.  So just give up.  */
-    exit (EXIT_FAILURE);
+  oname = xasprintf ("%s_rtr%06d.o", dll_symname, tmp_seq);
   tmp_seq++;
 
   abfd = bfd_create (oname, parent);
@@ -2833,12 +2805,7 @@ pe_create_runtime_relocator_reference (bfd *parent)
   char *oname;
   bfd *abfd;
 
-  if (asprintf (&oname, "%s_ertr%06d.o", dll_symname, tmp_seq) < 4)
-    /* In theory we should return NULL here at let our caller decide what to
-       do.  But currently the return value is not checked, just used, and
-       besides, this condition only happens when the system has run out of
-       memory.  So just give up.  */
-    exit (EXIT_FAILURE);
+  oname = xasprintf ("%s_ertr%06d.o", dll_symname, tmp_seq);
   tmp_seq++;
 
   abfd = bfd_create (oname, parent);
@@ -3093,13 +3060,6 @@ pe_dll_generate_implib (def_file *def, const char *impfilename, struct bfd_link_
 
   if (! bfd_close (outarch))
     einfo ("%X%P: bfd_close %s: %E\n", impfilename);
-
-  while (head != NULL)
-    {
-      bfd *n = head->archive_next;
-      bfd_close (head);
-      head = n;
-    }
 }
 
 static int undef_count = 0;

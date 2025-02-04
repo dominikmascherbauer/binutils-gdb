@@ -46,6 +46,7 @@
 #include <unordered_set>
 #include "gdbsupport/underlying.h"
 #include "gdbsupport/byte-vector.h"
+#include "extract-store-integer.h"
 
 static struct value *dwarf2_evaluate_loc_desc_full
   (struct type *type, const frame_info_ptr &frame, const gdb_byte *data,
@@ -779,7 +780,7 @@ func_addr_to_tail_call_list (struct gdbarch *gdbarch, CORE_ADDR addr)
    via its tail calls (incl. transitively).  Throw NO_ENTRY_VALUE_ERROR if it
    can call itself via tail calls.
 
-   If a funtion can tail call itself its entry value based parameters are
+   If a function can tail call itself its entry value based parameters are
    unreliable.  There is no verification whether the value of some/all
    parameters is unchanged through the self tail call, we expect if there is
    a self tail call all the parameters can be modified.  */
@@ -4124,13 +4125,13 @@ _initialize_dwarf2loc ()
 {
   add_setshow_zuinteger_cmd ("entry-values", class_maintenance,
 			     &entry_values_debug,
-			     _("Set entry values and tail call frames "
-			       "debugging."),
-			     _("Show entry values and tail call frames "
-			       "debugging."),
-			     _("When non-zero, the process of determining "
-			       "parameter values from function entry point "
-			       "and tail call frames will be printed."),
+			     _("\
+Set entry values and tail call frames debugging."),
+			     _("\
+Show entry values and tail call frames debugging."),
+			     _("\
+When non-zero, the process of determining parameter values from\n\
+function entry point and tail call frames will be printed."),
 			     NULL,
 			     show_entry_values_debug,
 			     &setdebuglist, &showdebuglist);

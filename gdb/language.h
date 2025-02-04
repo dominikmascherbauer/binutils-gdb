@@ -20,8 +20,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#if !defined (LANGUAGE_H)
-#define LANGUAGE_H 1
+#ifndef GDB_LANGUAGE_H
+#define GDB_LANGUAGE_H
 
 #include "symtab.h"
 #include "gdbsupport/function-view.h"
@@ -731,6 +731,10 @@ extern const struct language_defn *expected_language;
 
 extern const char lang_frame_mismatch_warn[];
 
+/* Controls whether to warn on a frame language mismatch.  */
+
+extern bool warn_frame_lang_mismatch;
+
 /* language_mode == 
    language_mode_auto:   current_language automatically set upon selection
    of scope (e.g. stack frame)
@@ -784,7 +788,7 @@ struct symbol *
 					    const char *name);
 
 
-/* These macros define the behaviour of the expression 
+/* These macros define the behavior of the expression 
    evaluator.  */
 
 /* Should we range check values against the domain of their type?  */
@@ -932,4 +936,4 @@ private:
   enum language m_lang;
 };
 
-#endif /* defined (LANGUAGE_H) */
+#endif /* GDB_LANGUAGE_H */

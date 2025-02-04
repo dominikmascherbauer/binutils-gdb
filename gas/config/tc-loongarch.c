@@ -1,6 +1,6 @@
 /* tc-loongarch.c -- Assemble for the LoongArch ISA
 
-   Copyright (C) 2021-2024 Free Software Foundation, Inc.
+   Copyright (C) 2021-2025 Free Software Foundation, Inc.
    Contributed by Loongson Ltd.
 
    This file is part of GAS.
@@ -112,7 +112,7 @@ const char EXP_CHARS[] = "eE";
 /* or    0d1.2345e12.  */
 const char FLT_CHARS[] = "rRsSfFdDxXpP";
 
-const char *md_shortopts = "O::g::G:";
+const char md_shortopts[] = "O::g::G:";
 
 static const char default_arch[] = DEFAULT_ARCH;
 
@@ -154,7 +154,7 @@ enum options
   OPTION_END_OF_ENUM,
 };
 
-struct option md_longopts[] =
+const struct option md_longopts[] =
 {
   { "mabi", required_argument, NULL, OPTION_ABI },
 
@@ -172,7 +172,7 @@ struct option md_longopts[] =
   { NULL, no_argument, NULL, 0 }
 };
 
-size_t md_longopts_size = sizeof (md_longopts);
+const size_t md_longopts_size = sizeof (md_longopts);
 
 int
 md_parse_option (int c, const char *arg)
@@ -276,6 +276,8 @@ static struct htab *c_htab = NULL;
 static struct htab *cr_htab = NULL;
 static struct htab *v_htab = NULL;
 static struct htab *x_htab = NULL;
+static struct htab *cfi_r_htab = NULL;
+static struct htab *cfi_f_htab = NULL;
 
 void
 loongarch_after_parse_args ()
@@ -322,15 +324,27 @@ loongarch_after_parse_args ()
   if (!r_deprecated_htab)
     r_deprecated_htab = str_htab_create (),
 			str_hash_insert (r_deprecated_htab, "", 0, 0);
+  /* Init cfi registers alias.  */
+  if (!cfi_r_htab)
+    cfi_r_htab = str_htab_create (), str_hash_insert (cfi_r_htab, "", 0, 0);
 
   r_abi_names = loongarch_r_normal_name;
   for (i = 0; i < ARRAY_SIZE (loongarch_r_normal_name); i++)
-    str_hash_insert (r_htab, loongarch_r_normal_name[i], (void *) (i + 1), 0);
-
+    {
+      str_hash_insert (r_htab, loongarch_r_normal_name[i],
+		       (void *) (i + 1), 0);
+      str_hash_insert (cfi_r_htab, loongarch_r_normal_name[i],
+		       (void *) (i + 1), 0);
+    }
   /* Init ilp32/lp64 registers alias.  */
   r_abi_names = loongarch_r_alias;
   for (i = 0; i < ARRAY_SIZE (loongarch_r_alias); i++)
-    str_hash_insert (r_htab, loongarch_r_alias[i], (void *) (i + 1), 0);
+    {
+      str_hash_insert (r_htab, loongarch_r_alias[i],
+		       (void *) (i + 1), 0);
+      str_hash_insert (cfi_r_htab, loongarch_r_alias[i],
+		       (void *) (i + 1), 0);
+    }
 
   for (i = 0; i < ARRAY_SIZE (loongarch_r_alias_1); i++)
     str_hash_insert (r_htab, loongarch_r_alias_1[i], (void *) (i + 1), 0);
@@ -338,6 +352,15 @@ loongarch_after_parse_args ()
   for (i = 0; i < ARRAY_SIZE (loongarch_r_alias_deprecated); i++)
     str_hash_insert (r_deprecated_htab, loongarch_r_alias_deprecated[i],
 	(void *) (i + 1), 0);
+
+  /* The .cfi directive supports register aliases without the "$" prefix.  */
+  for (i = 0; i < ARRAY_SIZE (loongarch_r_cfi_name); i++)
+    {
+      str_hash_insert (cfi_r_htab, loongarch_r_cfi_name[i],
+		       (void *)(i + 1), 0);
+      str_hash_insert (cfi_r_htab, loongarch_r_cfi_name_alias[i],
+		       (void *)(i + 1), 0);
+    }
 
   if (!cr_htab)
     cr_htab = str_htab_create (), str_hash_insert (cr_htab, "", 0, 0);
@@ -353,20 +376,38 @@ loongarch_after_parse_args ()
       if (!f_deprecated_htab)
 	f_deprecated_htab = str_htab_create (),
 			    str_hash_insert (f_deprecated_htab, "", 0, 0);
+      if (!cfi_f_htab)
+	cfi_f_htab = str_htab_create (), str_hash_insert (cfi_f_htab, "", 0, 0);
 
       f_abi_names = loongarch_f_normal_name;
       for (i = 0; i < ARRAY_SIZE (loongarch_f_normal_name); i++)
-	str_hash_insert (f_htab, loongarch_f_normal_name[i], (void *) (i + 1),
-			 0);
-
+	{
+	  str_hash_insert (f_htab, loongarch_f_normal_name[i],
+			   (void *) (i + 1), 0);
+	  str_hash_insert (cfi_f_htab, loongarch_f_normal_name[i],
+			   (void *) (i + 1), 0);
+	}
       /* Init float-ilp32/lp64 registers alias.  */
       f_abi_names = loongarch_f_alias;
       for (i = 0; i < ARRAY_SIZE (loongarch_f_alias); i++)
-	str_hash_insert (f_htab, loongarch_f_alias[i],
-	    (void *) (i + 1), 0);
+	{
+	  str_hash_insert (f_htab, loongarch_f_alias[i],
+			   (void *) (i + 1), 0);
+	  str_hash_insert (cfi_f_htab, loongarch_f_alias[i],
+			   (void *) (i + 1), 0);
+	}
       for (i = 0; i < ARRAY_SIZE (loongarch_f_alias_deprecated); i++)
 	str_hash_insert (f_deprecated_htab, loongarch_f_alias_deprecated[i],
 	    (void *) (i + 1), 0);
+
+  /* The .cfi directive supports register aliases without the "$" prefix.  */
+  for (i = 0; i < ARRAY_SIZE (loongarch_f_cfi_name); i++)
+    {
+      str_hash_insert (cfi_f_htab, loongarch_f_cfi_name[i],
+		       (void *)(i + 1), 0);
+      str_hash_insert (cfi_f_htab, loongarch_f_cfi_name_alias[i],
+		       (void *)(i + 1), 0);
+    }
 
       if (!fc_htab)
 	fc_htab = str_htab_create (), str_hash_insert (fc_htab, "", 0, 0);
@@ -1080,7 +1121,7 @@ check_this_insn_before_appending (struct loongarch_cl_insn *ip)
     }
   /* check all atomic memory insns */
   else if (ip->insn->mask == LARCH_MK_ATOMIC_MEM
-	   && LARCH_INSN_ATOMIC_MEM(ip->insn_bin))
+	   && LARCH_INSN_ATOMIC_MEM (ip->insn_bin))
     {
       /* For AMO insn amswap.[wd], amadd.[wd], etc.  */
       if (ip->args[0] != 0
@@ -1090,22 +1131,22 @@ check_this_insn_before_appending (struct loongarch_cl_insn *ip)
     }
   else if ((ip->insn->mask == LARCH_MK_BSTRINS_W
 	    /* bstr(ins|pick).w  rd, rj, msbw, lsbw  */
-	    && (LARCH_INSN_BSTRINS_W(ip->insn_bin)
-		|| LARCH_INSN_BSTRPICK_W(ip->insn_bin)))
+	    && (LARCH_INSN_BSTRINS_W (ip->insn_bin)
+		|| LARCH_INSN_BSTRPICK_W (ip->insn_bin)))
 	   || (ip->insn->mask == LARCH_MK_BSTRINS_D
 	       /* bstr(ins|pick).d  rd, rj, msbd, lsbd  */
-	       && (LARCH_INSN_BSTRINS_D(ip->insn_bin)
-		   || LARCH_INSN_BSTRPICK_D(ip->insn_bin))))
+	       && (LARCH_INSN_BSTRINS_D (ip->insn_bin)
+		   || LARCH_INSN_BSTRPICK_D (ip->insn_bin))))
     {
       /* For bstr(ins|pick).[wd].  */
       if (ip->args[2] < ip->args[3])
 	as_bad (_("bstr(ins|pick).[wd] require msbd >= lsbd"));
     }
   else if (ip->insn->mask != 0
-	   && (LARCH_INSN_CSRXCHG(ip->insn_bin)
-	       || LARCH_INSN_GCSRXCHG(ip->insn_bin))
-	   && (LARCH_GET_RJ(ip->insn_bin) == 0
-	       || LARCH_GET_RJ(ip->insn_bin) == 1)
+	   && (LARCH_INSN_CSRXCHG (ip->insn_bin)
+	       || LARCH_INSN_GCSRXCHG (ip->insn_bin))
+	   && (LARCH_GET_RJ (ip->insn_bin) == 0
+	       || LARCH_GET_RJ (ip->insn_bin) == 1)
 	   /* csrxchg  rd, rj, csr_num  */
 	   && (strcmp ("csrxchg", ip->name) == 0
 	       || strcmp ("gcsrxchg", ip->name) == 0))
@@ -1383,9 +1424,9 @@ loongarch_assemble_INSNs (char *str, unsigned int expand_from_macro)
       the_one.name = str;
       the_one.expand_from_macro = expand_from_macro;
 
-      for (; *str && *str != ' '; str++)
+      for (; *str && !is_whitespace (*str); str++)
 	;
-      if (*str == ' ')
+      if (is_whitespace (*str))
 	*str++ = '\0';
 
       loongarch_split_args_by_comma (str, the_one.arg_strs);
@@ -1454,6 +1495,30 @@ long
 md_pcrel_from (fixS *fixP ATTRIBUTE_UNUSED)
 {
   return 0;
+}
+
+/* Return 1 if the relocation must be forced, and 0 if the relocation
+   should never be forced.  */
+int
+loongarch_force_relocation (struct fix *fixp)
+{
+  /* Ensure we emit a relocation for every reference to the global
+     offset table.  */
+  switch (fixp->fx_r_type)
+    {
+      case BFD_RELOC_LARCH_GOT_PC_HI20:
+      case BFD_RELOC_LARCH_GOT_PC_LO12:
+      case BFD_RELOC_LARCH_GOT64_PC_LO20:
+      case BFD_RELOC_LARCH_GOT64_PC_HI12:
+      case BFD_RELOC_LARCH_GOT_HI20:
+      case BFD_RELOC_LARCH_GOT_LO12:
+      case BFD_RELOC_LARCH_GOT64_LO20:
+      case BFD_RELOC_LARCH_GOT64_HI12:
+	return 1;
+      default:
+	break;
+    }
+  return generic_force_reloc (fixp);
 }
 
 static void fix_reloc_insn (fixS *fixP, bfd_vma reloc_val, char *buf)
@@ -1814,9 +1879,10 @@ md_estimate_size_before_relax (fragS *fragp, asection *sec)
 arelent *
 tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
 {
-  arelent *reloc = (arelent *) xmalloc (sizeof (arelent));
+  arelent *reloc;
 
-  reloc->sym_ptr_ptr = (asymbol **) xmalloc (sizeof (asymbol *));
+  reloc = notes_alloc (sizeof (arelent));
+  reloc->sym_ptr_ptr = notes_alloc (sizeof (asymbol *));
   *reloc->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_addsy);
   reloc->address = fixp->fx_frag->fr_address + fixp->fx_where;
   reloc->addend = fixp->fx_offset;
@@ -1839,6 +1905,46 @@ loongarch_cfi_frame_initial_instructions (void)
 {
   cfi_add_CFA_def_cfa_register (3 /* $sp */);
 }
+
+/* Convert REGNAME to a DWARF register number.  */
+int
+tc_loongarch_regname_to_dw2regnum (char *regname)
+{
+  int reg;
+
+  /* Look up in the general purpose register table.  */
+  if ((reg = (intptr_t) str_hash_find (cfi_r_htab, regname)) > 0)
+    return reg - 1;
+
+  /* Look up in the floating point register table.  */
+  if ((reg = (intptr_t) str_hash_find (cfi_f_htab, regname)) > 0)
+    return reg + 31;
+
+  as_bad (_("unknown register `%s`"), regname);
+  return -1;
+}
+
+/* Derived from tc_parse_to_dw2regnum, but excluding the case where
+   the prefix '%'.  */
+void
+tc_loongarch_parse_to_dw2regnum (expressionS *exp)
+{
+  SKIP_WHITESPACE ();
+  if (is_name_beginner (*input_line_pointer))
+    {
+      char *name, c;
+
+      c = get_symbol_name (& name);
+
+      exp->X_op = O_constant;
+      exp->X_add_number = tc_loongarch_regname_to_dw2regnum (name);
+
+      restore_line_pointer (c);
+    }
+  else
+    expression_and_evaluate (exp);
+}
+
 
 void
 loongarch_pre_output_hook (void)
@@ -1883,12 +1989,6 @@ loongarch_pre_output_hook (void)
 
   /* Restore the original segment info.  */
   subseg_set (seg, subseg);
-}
-
-void
-tc_loongarch_parse_to_dw2regnum (expressionS *exp)
-{
-  expression_and_evaluate (exp);
 }
 
 void
@@ -2207,7 +2307,7 @@ loongarch_convert_frag_branch (fragS *fragp)
     case RELAX_BRANCH_26:
       insn = bfd_getl32 (buf);
       /* Invert the branch condition.  */
-      if (LARCH_INSN_FLOAT_BRANCH(insn))
+      if (LARCH_INSN_FLOAT_BRANCH (insn))
 	insn ^= LARCH_FLOAT_BRANCH_INVERT_BIT;
       else
 	insn ^= LARCH_BRANCH_INVERT_BIT;

@@ -1,5 +1,5 @@
 /* tc-arc.c -- Assembler for the ARC
-   Copyright (C) 1994-2024 Free Software Foundation, Inc.
+   Copyright (C) 1994-2025 Free Software Foundation, Inc.
 
    Contributor: Claudiu Zissulescu <claziss@synopsys.com>
 
@@ -183,7 +183,7 @@ const pseudo_typeS md_pseudo_table[] =
   { NULL, NULL, 0 }
 };
 
-const char *md_shortopts = "";
+const char md_shortopts[] = "";
 
 enum options
 {
@@ -229,7 +229,7 @@ enum options
   OPTION_RTSC
 };
 
-struct option md_longopts[] =
+const struct option md_longopts[] =
 {
   { "EB",		no_argument,	   NULL, OPTION_EB },
   { "EL",		no_argument,	   NULL, OPTION_EL },
@@ -292,7 +292,7 @@ struct option md_longopts[] =
   { NULL,		no_argument, NULL, 0 }
 };
 
-size_t md_longopts_size = sizeof (md_longopts);
+const size_t md_longopts_size = sizeof (md_longopts);
 
 /* Local data and data types.  */
 
@@ -1152,8 +1152,8 @@ parse_reloc_symbol (expressionS *resultP)
       return;
     }
 
-  *input_line_pointer = c;
-  SKIP_WHITESPACE_AFTER_NAME ();
+  restore_line_pointer (c);
+  SKIP_WHITESPACE ();
   /* Extra check for TLS: base.  */
   if (*input_line_pointer == '@')
     {
@@ -1374,10 +1374,6 @@ tokenize_flags (const char *str,
     {
       switch (*input_line_pointer)
 	{
-	case ' ':
-	case '\0':
-	  goto fini;
-
 	case '.':
 	  input_line_pointer++;
 	  if (saw_dot)
@@ -1387,6 +1383,10 @@ tokenize_flags (const char *str,
 	  break;
 
 	default:
+	  if (is_end_of_stmt (*input_line_pointer)
+	      || is_whitespace (*input_line_pointer))
+	    goto fini;
+
 	  if (saw_flg && !saw_dot)
 	    goto err;
 
@@ -2536,8 +2536,8 @@ md_assemble (char *str)
   /* Scan up to the end of the mnemonic which must end in space or end
      of string.  */
   str += opnamelen;
-  for (; *str != '\0'; str++)
-    if (*str == ' ')
+  for (; !is_end_of_stmt (*str); str++)
+    if (is_whitespace (*str))
       break;
 
   /* Tokenize the rest of the line.  */
@@ -3251,8 +3251,8 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED,
   arelent *reloc;
   bfd_reloc_code_real_type code;
 
-  reloc = XNEW (arelent);
-  reloc->sym_ptr_ptr = XNEW (asymbol *);
+  reloc = notes_alloc (sizeof (arelent));
+  reloc->sym_ptr_ptr = notes_alloc (sizeof (asymbol *));
   *reloc->sym_ptr_ptr = symbol_get_bfdsym (fixP->fx_addsy);
   reloc->address = fixP->fx_frag->fr_address + fixP->fx_where;
 

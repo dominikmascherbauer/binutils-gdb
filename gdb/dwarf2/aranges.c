@@ -19,6 +19,7 @@
 
 #include "dwarf2/aranges.h"
 #include "dwarf2/read.h"
+#include "extract-store-integer.h"
 
 /* See aranges.h.  */
 
@@ -38,9 +39,7 @@ read_addrmap_from_aranges (dwarf2_per_objfile *per_objfile,
   struct gdbarch *gdbarch = objfile->arch ();
   dwarf2_per_bfd *per_bfd = per_objfile->per_bfd;
 
-  std::unordered_map<sect_offset,
-		     dwarf2_per_cu_data *,
-		     gdb::hash_enum<sect_offset>>
+  std::unordered_map<sect_offset, dwarf2_per_cu_data *>
     debug_info_offset_to_per_cu;
   for (const auto &per_cu : per_bfd->all_units)
     {

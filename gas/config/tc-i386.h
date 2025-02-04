@@ -1,5 +1,5 @@
 /* tc-i386.h -- Header file for tc-i386.c
-   Copyright (C) 1989-2024 Free Software Foundation, Inc.
+   Copyright (C) 1989-2025 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -84,9 +84,7 @@ extern unsigned long i386_mach (void);
 #define ELF_TARGET_IAMCU_FORMAT	"elf32-iamcu"
 #endif
 
-#if ((defined (OBJ_MAYBE_COFF) && defined (OBJ_MAYBE_AOUT)) \
-     || defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF) \
-     || defined (TE_PE) || defined (TE_PEP) || defined (OBJ_MACH_O))
+#if (defined (OBJ_ELF) || defined (TE_PE) || defined (OBJ_MACH_O))
 extern const char *i386_target_format (void);
 #define TARGET_FORMAT i386_target_format ()
 #else
@@ -141,7 +139,7 @@ int i386_validate_fix (struct fix *);
     if (!i386_validate_fix(FIX)) goto SKIP;      \
   } while (0)
 
-#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+#ifdef OBJ_ELF
 #define tc_fix_adjustable(X)  tc_i386_fix_adjustable(X)
 extern int tc_i386_fix_adjustable (struct fix *);
 #else
@@ -172,7 +170,9 @@ extern int tc_i386_fix_adjustable (struct fix *);
    || (FIX)->fx_r_type == BFD_RELOC_X86_64_GOTPCREL		\
    || (FIX)->fx_r_type == BFD_RELOC_X86_64_GOTPCRELX		\
    || (FIX)->fx_r_type == BFD_RELOC_X86_64_REX_GOTPCRELX	\
-   || (FIX)->fx_r_type == BFD_RELOC_X86_64_CODE_4_GOTPCRELX)
+   || (FIX)->fx_r_type == BFD_RELOC_X86_64_CODE_4_GOTPCRELX	\
+   || (FIX)->fx_r_type == BFD_RELOC_X86_64_CODE_5_GOTPCRELX	\
+   || (FIX)->fx_r_type == BFD_RELOC_X86_64_CODE_6_GOTPCRELX)
 
 #define TC_FORCE_RELOCATION_ABS(FIX)				\
   (TC_FORCE_RELOCATION (FIX)					\
@@ -181,7 +181,9 @@ extern int tc_i386_fix_adjustable (struct fix *);
    || (FIX)->fx_r_type == BFD_RELOC_X86_64_GOTPCREL		\
    || (FIX)->fx_r_type == BFD_RELOC_X86_64_GOTPCRELX		\
    || (FIX)->fx_r_type == BFD_RELOC_X86_64_REX_GOTPCRELX	\
-   || (FIX)->fx_r_type == BFD_RELOC_X86_64_CODE_4_GOTPCRELX)
+   || (FIX)->fx_r_type == BFD_RELOC_X86_64_CODE_4_GOTPCRELX	\
+   || (FIX)->fx_r_type == BFD_RELOC_X86_64_CODE_5_GOTPCRELX	\
+   || (FIX)->fx_r_type == BFD_RELOC_X86_64_CODE_6_GOTPCRELX)
 
 extern void i386_start_line (void);
 #define md_start_line_hook i386_start_line
@@ -193,8 +195,8 @@ extern bool i386_check_label (void);
 extern int i386_unrecognized_line (int);
 #define tc_unrecognized_line i386_unrecognized_line
 
-extern int i386_parse_name (char *, expressionS *, char *);
-#define md_parse_name(s, e, m, c) i386_parse_name (s, e, c)
+extern int i386_parse_name (char *, expressionS *, enum expr_mode, char *);
+#define md_parse_name(s, e, m, c) i386_parse_name (s, e, m, c)
 
 extern operatorT i386_operator (const char *name, unsigned int operands, char *);
 #define md_operator i386_operator
@@ -233,7 +235,7 @@ if ((n)									\
 extern void i386_cons_align (int);
 #define md_cons_align(nbytes) i386_cons_align (nbytes)
 
-#if !defined (OBJ_AOUT) && !defined (OBJ_MAYBE_AOUT)
+#ifndef OBJ_AOUT
 #define md_section_align(seg, value) ((void)(seg), (value))
 #endif
 
@@ -376,7 +378,7 @@ extern void i386_generate_nops (fragS *, char *, offsetT, int);
 #define md_generate_nops(frag, where, amount, control) \
   i386_generate_nops ((frag), (where), (amount), (control))
 
-#define HANDLE_ALIGN(fragP)						\
+#define HANDLE_ALIGN(sec, fragP)						\
 if (fragP->fr_type == rs_align_code) 					\
   {									\
     offsetT __count = (fragP->fr_next->fr_address			\
@@ -426,7 +428,7 @@ extern void i386_solaris_fix_up_eh_frame (segT);
 extern bfd_vma x86_64_section_letter (int, const char **);
 #define md_elf_section_letter(LETTER, PTR_MSG)	x86_64_section_letter (LETTER, PTR_MSG)
 
-#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+#ifdef OBJ_ELF
 extern void x86_cleanup (void);
 #define md_cleanup() x86_cleanup ()
 

@@ -1,5 +1,5 @@
 /* ldmisc.c
-   Copyright (C) 1991-2024 Free Software Foundation, Inc.
+   Copyright (C) 1991-2025 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support.
 
    This file is part of the GNU Binutils.
@@ -769,4 +769,82 @@ ld_abort (const char *file, int line, const char *fn)
 	   file, line);
   einfo (_("%F%P: please report this bug\n"));
   xexit (1);
+}
+
+/* Decode a hexadecimal character. Return -1 on error. */
+static int
+hexdecode (char c)
+{
+  if ('0' <= c && c <= '9')
+    return c - '0';
+  if ('A' <= c && c <= 'F')
+    return c - 'A' + 10;
+  if ('a' <= c && c <= 'f')
+    return c - 'a' + 10;
+  return -1;
+}
+
+/* Decode a percent and/or %[string] encoded string. dst must be at least
+   the same size as src. It can be converted in place.
+
+   Following %[string] encodings are supported:
+
+   %[comma] for ,
+   %[lbrace] for {
+   %[quot] for "
+   %[rbrace] for }
+   %[space] for ' '
+
+   The percent decoding behaves the same as Python's urllib.parse.unquote. */
+void
+percent_decode (const char *src, char *dst)
+{
+  while (*src != '\0')
+    {
+      char c = *src++;
+      if (c == '%')
+	{
+	  char next1 = *src;
+	  int hex1 = hexdecode (next1);
+	  if (hex1 != -1)
+	    {
+	      int hex2 = hexdecode (*(src + 1));
+	      if (hex2 != -1)
+		{
+		  c = (char) ((hex1 << 4) + hex2);
+		  src += 2;
+		}
+	    }
+	  else if (next1 == '[')
+	    {
+	      if (strncmp (src + 1, "comma]", 6) == 0)
+		{
+		  c = ',';
+		  src += 7;
+		}
+	      else if (strncmp (src + 1, "lbrace]", 7) == 0)
+		{
+		  c = '{';
+		  src += 8;
+		}
+	      else if (strncmp (src + 1, "quot]", 5) == 0)
+		{
+		  c = '"';
+		  src += 6;
+		}
+	      else if (strncmp (src + 1, "rbrace]", 7) == 0)
+		{
+		  c = '}';
+		  src += 8;
+		}
+	      else if (strncmp (src + 1, "space]", 6) == 0)
+		{
+		  c = ' ';
+		  src += 7;
+		}
+	    }
+	}
+      *dst++ = c;
+    }
+  *dst = '\0';
 }

@@ -1,5 +1,5 @@
 /* Declarations for Intel 80386 opcode table
-   Copyright (C) 2007-2024 Free Software Foundation, Inc.
+   Copyright (C) 2007-2025 Free Software Foundation, Inc.
 
    This file is part of the GNU opcodes library.
 
@@ -66,6 +66,14 @@ enum i386_cpu
   CpuSSE3,
   /* VIA PadLock required */
   CpuPadLock,
+  /* Zhaoxin GMI SM2 required */
+  CpuGMISM2,
+  /* Zhaoxin GMI CCS required */
+  CpuGMICCS,
+  /* Zhaoxin PadLock RNG2 required */
+  CpuPadLockRNG2,
+  /* Zhaoxin PadLock PHE2 required */
+  CpuPadLockPHE2,
   /* AMD Secure Virtual Machine Ext-s required */
   CpuSVME,
   /* VMX Instructions required */
@@ -225,8 +233,10 @@ enum i386_cpu
   CpuLKGS,
   /* Intel USER_MSR Instruction support required.  */
   CpuUSER_MSR,
-  /* Intel AVX10.2 Instructions support required.  */
-  CpuAVX10_2,
+  /* Intel MSR_IMM Instructions support required.  */
+  CpuMSR_IMM,
+  /* Intel MOVRS Instructions support required.  */
+  CpuMOVRS,
   /* mwaitx instruction required */
   CpuMWAITX,
   /* Clzero instruction required */
@@ -248,6 +258,14 @@ enum i386_cpu
   CpuAMX_FP16,
   /* AMX-COMPLEX instructions required.  */
   CpuAMX_COMPLEX,
+  /* AMX-TF32 Instructions support required.  */
+  CpuAMX_TF32,
+  /* AMX-FP8 instructions required */
+  CpuAMX_FP8,
+  /* AMX-MOVRS Instructions support required.  */
+  CpuAMX_MOVRS,
+  /* AMX-AVX512 Instructions support required.  */
+  CpuAMX_AVX512,
   /* AMX-TILE instructions required */
   CpuAMX_TILE,
   /* GFNI instructions required */
@@ -298,6 +316,8 @@ enum i386_cpu
   CpuSNP,
   /* RMPQUERY instruction required */
   CpuRMPQUERY,
+  /* RMPREAD instruction required */
+  CpuRMPREAD,
 
   /* NOTE: These items, which can be combined with other ISA flags above, need
      to remain second to last and in sync with CPU_FLAGS_COMMON. */
@@ -323,6 +343,10 @@ enum i386_cpu
   CpuAVX512VL,
   /* Intel APX_F Instructions support required.  */
   CpuAPX_F,
+  /* Intel AVX10.2 Instructions support required.  */
+  CpuAVX10_2,
+  /* Intel AMX-TRANSPOSE Instructions support required.  */
+  CpuAMX_TRANSPOSE,
   /* Not supported in the 64bit mode  */
   CpuNo64,
 
@@ -359,6 +383,8 @@ enum i386_cpu
 		   cpuavx512f:1, \
 		   cpuavx512vl:1, \
 		   cpuapx_f:1, \
+		   cpuavx10_2:1, \
+		   cpuamx_transpose:1, \
       /* NOTE: This field needs to remain last. */ \
 		   cpuno64:1
 
@@ -400,6 +426,10 @@ typedef union i386_cpu_flags
       unsigned int cpusse2:1;
       unsigned int cpusse3:1;
       unsigned int cpupadlock:1;
+      unsigned int cpugmism2:1;
+      unsigned int cpugmiccs:1;
+      unsigned int cpupadlockrng2:1;
+      unsigned int cpupadlockphe2:1;
       unsigned int cpusvme:1;
       unsigned int cpuvmx:1;
       unsigned int cpusmx:1;
@@ -479,7 +509,8 @@ typedef union i386_cpu_flags
       unsigned int cpufred:1;
       unsigned int cpulkgs:1;
       unsigned int cpuuser_msr:1;
-      unsigned int cpuavx10_2:1;
+      unsigned int cpumsr_imm:1;
+      unsigned int cpumovrs:1;
       unsigned int cpumwaitx:1;
       unsigned int cpuclzero:1;
       unsigned int cpuospke:1;
@@ -491,6 +522,10 @@ typedef union i386_cpu_flags
       unsigned int cpuamx_bf16:1;
       unsigned int cpuamx_fp16:1;
       unsigned int cpuamx_complex:1;
+      unsigned int cpuamx_tf32:1;
+      unsigned int cpuamx_fp8:1;
+      unsigned int cpuamx_movrs:1;
+      unsigned int cpuamx_avx512:1;
       unsigned int cpuamx_tile:1;
       unsigned int cpugfni:1;
       unsigned int cpuvaes:1;
@@ -516,6 +551,7 @@ typedef union i386_cpu_flags
       unsigned int cputlbsync:1;
       unsigned int cpusnp:1;
       unsigned int cpurmpquery:1;
+      unsigned int cpurmpread:1;
       CPU_FLAGS_COMMON;
 #ifdef CpuUnused
       unsigned int unused:(CpuNumOfBits - CpuUnused);
@@ -569,10 +605,12 @@ enum
 #define UGH 3
   /* An implicit xmm0 as the first operand */
 #define IMPLICIT_1ST_XMM0 4
-  /* The second operand must be a vector register, {x,y,z}mmN, where N is a multiple of 4.
-     It implicitly denotes the register group of {x,y,z}mmN - {x,y,z}mm(N + 3).
+  /* One of the operands denotes a sequence of registers, with insn-dependent
+     constraint on the first register number.  It implicitly denotes e.g. the
+     register group of {x,y,z}mmN - {x,y,z}mm(N + 3), in which case N ought to
+     be a multiple of 4.
    */
-#define IMPLICIT_QUAD_GROUP 5
+#define IMPLICIT_GROUP 5
   /* Default mask isn't allowed.  */
 #define NO_DEFAULT_MASK 6
   /* Address prefix changes register operand */
@@ -984,15 +1022,15 @@ typedef struct insn_template
   /* opcode space */
   unsigned int opcode_space:4;
   /* Opcode encoding space (values chosen to be usable directly in
-     VEX/XOP mmmmm and EVEX mm fields):
+     VEX/XOP mmmmm and EVEX mmm fields):
      0: Base opcode space.
      1: 0F opcode prefix / space.
      2: 0F38 opcode prefix / space.
      3: 0F3A opcode prefix / space.
-     4: EVEXMAP4 opcode prefix / space.
-     5: EVEXMAP5 opcode prefix / space.
-     6: EVEXMAP6 opcode prefix / space.
-     7: VEXMAP7 opcode prefix / space.
+     4: MAP4 opcode prefix / space.
+     5: MAP5 opcode prefix / space.
+     6: MAP6 opcode prefix / space.
+     7: MAP7 opcode prefix / space.
      8: XOP 08 opcode space.
      9: XOP 09 opcode space.
      A: XOP 0A opcode space.
@@ -1001,10 +1039,10 @@ typedef struct insn_template
 #define SPACE_0F	1
 #define SPACE_0F38	2
 #define SPACE_0F3A	3
-#define SPACE_EVEXMAP4	4
-#define SPACE_EVEXMAP5	5
-#define SPACE_EVEXMAP6	6
-#define SPACE_VEXMAP7	7
+#define SPACE_MAP4	4
+#define SPACE_MAP5	5
+#define SPACE_MAP6	6
+#define SPACE_MAP7	7
 #define SPACE_XOP08	8
 #define SPACE_XOP09	9
 #define SPACE_XOP0A	0xA

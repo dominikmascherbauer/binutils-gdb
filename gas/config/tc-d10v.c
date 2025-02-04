@@ -1,5 +1,5 @@
 /* tc-d10v.c -- Assembler code for the Mitsubishi D10V
-   Copyright (C) 1996-2024 Free Software Foundation, Inc.
+   Copyright (C) 1996-2025 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -28,7 +28,7 @@
 const char comment_chars[]        = ";";
 const char line_comment_chars[]   = "#";
 const char line_separator_chars[] = "";
-const char *md_shortopts          = "O";
+const char md_shortopts[]         = "O";
 const char EXP_CHARS[]            = "eE";
 const char FLT_CHARS[]            = "dD";
 
@@ -88,7 +88,7 @@ enum options
   OPTION_NOGSTABSPACKING
 };
 
-struct option md_longopts[] =
+const struct option md_longopts[] =
 {
   {"nowarnswap", no_argument, NULL, OPTION_NOWARNSWAP},
   {"gstabspacking",  no_argument, NULL, OPTION_GSTABSPACKING},
@@ -98,7 +98,7 @@ struct option md_longopts[] =
   {NULL, no_argument, NULL, 0}
 };
 
-size_t md_longopts_size = sizeof (md_longopts);
+const size_t md_longopts_size = sizeof (md_longopts);
 
 /* Opcode hash table.  */
 static htab_t d10v_hash;
@@ -140,8 +140,7 @@ register_name (expressionS *expressionP)
   int reg_number;
   char c, *p = input_line_pointer;
 
-  while (*p
-	 && *p != '\n' && *p != '\r' && *p != ',' && *p != ' ' && *p != ')')
+  while (!is_end_of_stmt (*p) && *p != ',' && !is_whitespace (*p) && *p != ')')
     p++;
 
   c = *p;
@@ -356,9 +355,9 @@ get_operands (expressionS exp[])
 
   while (*p)
     {
-      while (*p == ' ' || *p == '\t' || *p == ',')
+      while (is_whitespace (*p) || *p == ',')
 	p++;
-      if (*p == 0 || *p == '\n' || *p == '\r')
+      if (is_end_of_stmt (*p))
 	break;
 
       if (*p == '@')
@@ -1410,12 +1409,12 @@ do_assemble (char *str, struct d10v_opcode **opcode)
   expressionS myops[6];
 
   /* Drop leading whitespace.  */
-  while (*str == ' ')
+  while (is_whitespace (*str))
     str++;
 
   /* Find the opcode end.  */
   for (op_start = op_end = (unsigned char *) str;
-       *op_end && !is_end_of_line[*op_end] && *op_end != ' ';
+       !is_end_of_stmt (*op_end) && !is_whitespace (*op_end);
        op_end++)
     {
       name[nlen] = TOLOWER (op_start[nlen]);
@@ -1450,8 +1449,8 @@ arelent *
 tc_gen_reloc (asection *seg ATTRIBUTE_UNUSED, fixS *fixp)
 {
   arelent *reloc;
-  reloc = XNEW (arelent);
-  reloc->sym_ptr_ptr = XNEW (asymbol *);
+  reloc = notes_alloc (sizeof (arelent));
+  reloc->sym_ptr_ptr = notes_alloc (sizeof (asymbol *));
   *reloc->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_addsy);
   reloc->address = fixp->fx_frag->fr_address + fixp->fx_where;
   reloc->howto = bfd_reloc_type_lookup (stdoutput, fixp->fx_r_type);

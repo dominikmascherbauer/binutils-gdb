@@ -1,5 +1,5 @@
 /* Intel 80386/80486-specific support for 32-bit ELF
-   Copyright (C) 1993-2024 Free Software Foundation, Inc.
+   Copyright (C) 1993-2025 Free Software Foundation, Inc.
 
    This file is part of BFD, the Binary File Descriptor library.
 
@@ -1723,7 +1723,7 @@ elf_i386_scan_relocs (bfd *abfd,
 		      name = h->root.root.string;
 		    else
 		      name = bfd_elf_sym_name (abfd, symtab_hdr, isym,
-					     NULL);
+					       NULL);
 		    _bfd_error_handler
 		      /* xgettext:c-format */
 		      (_("%pB: `%s' accessed both as normal and "

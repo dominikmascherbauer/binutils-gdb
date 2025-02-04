@@ -21,7 +21,8 @@
 #include <ctype.h>
 #include "event-top.h"
 #include "exceptions.h"
-#include "hashtab.h"
+#include "gdbsupport/gdb_vecs.h"
+#include "gdbsupport/unordered_set.h"
 #include "symtab.h"
 #include "frame.h"
 #include "breakpoint.h"
@@ -166,7 +167,7 @@ static std::vector<symtab_and_line> bkpt_probe_decode_location_spec
       location_spec *locspec,
       struct program_space *search_pspace);
 
-static bool bl_address_is_meaningful (bp_location *loc);
+static bool bl_address_is_meaningful (const bp_location *loc);
 
 static int find_loc_num_by_location (const bp_location *loc);
 
@@ -866,6 +867,24 @@ scoped_rbreak_breakpoints::scoped_rbreak_breakpoints ()
 scoped_rbreak_breakpoints::~scoped_rbreak_breakpoints ()
 {
   prev_breakpoint_count = rbreak_start_breakpoint_count;
+}
+
+/* See breakpoint.h.  */
+
+int
+scoped_rbreak_breakpoints::first_breakpoint () const
+{
+  return rbreak_start_breakpoint_count + 1;
+}
+
+/* See breakpoint.h.  */
+
+int
+scoped_rbreak_breakpoints::last_breakpoint () const
+{
+  return (rbreak_start_breakpoint_count == breakpoint_count
+	  ? -1
+	  : breakpoint_count);
 }
 
 /* Used in run_command to zero the hit count when a new run starts.  */
@@ -1578,10 +1597,20 @@ breakpoint_set_thread (struct breakpoint *b, int thread)
       /* If the program space has changed for this breakpoint, then
 	 re-evaluate it's locations.  */
       if (old_pspace != new_pspace)
-	breakpoint_re_set_one (b, new_pspace);
+	{
+	  /* The breakpoint is now associated with a completely different
+	     program space.  Discard all of the current locations and then
+	     re-set the breakpoint in the new program space, this will
+	     create the new locations.  */
+	  b->clear_locations ();
+	  breakpoint_re_set_one (b, new_pspace);
+	}
 
-      /* Let others know the breakpoint has changed.  */
-      notify_breakpoint_modified (b);
+      /* If the program space didn't change, or the breakpoint didn't
+	 acquire any new locations after the clear_locations call, then we
+	 need to notify of the breakpoint modification now.  */
+      if (old_pspace == new_pspace || !b->has_locations ())
+	notify_breakpoint_modified (b);
     }
 }
 
@@ -1625,9 +1654,20 @@ breakpoint_set_inferior (struct breakpoint *b, int inferior)
 	}
 
       if (old_pspace != new_pspace)
-	breakpoint_re_set_one (b, new_pspace);
+	{
+	  /* The breakpoint is now associated with a completely different
+	     program space.  Discard all of the current locations and then
+	     re-set the breakpoint in the new program space, this will
+	     create the new locations.  */
+	  b->clear_locations ();
+	  breakpoint_re_set_one (b, new_pspace);
+	}
 
-      notify_breakpoint_modified (b);
+      /* If the program space didn't change, or the breakpoint didn't
+	 acquire any new locations after the clear_locations call, then we
+	 need to notify of the breakpoint modification now.  */
+      if (old_pspace == new_pspace || !b->has_locations ())
+	notify_breakpoint_modified (b);
     }
 }
 
@@ -2292,7 +2332,8 @@ update_watchpoint (struct watchpoint *b, bool reparse)
 		  loc->gdbarch = v->type ()->arch ();
 		  loc->pspace = wp_pspace;
 		  loc->address
-		    = gdbarch_remove_non_address_bits (loc->gdbarch, addr);
+		    = gdbarch_remove_non_address_bits_watchpoint (loc->gdbarch,
+								  addr);
 		  b->add_location (*loc);
 
 		  if (bitsize != 0)
@@ -6972,7 +7013,7 @@ print_breakpoint (breakpoint *b)
    internal or momentary.  */
 
 int
-user_breakpoint_p (struct breakpoint *b)
+user_breakpoint_p (const breakpoint *b)
 {
   return b->number > 0;
 }
@@ -6980,7 +7021,7 @@ user_breakpoint_p (struct breakpoint *b)
 /* See breakpoint.h.  */
 
 int
-pending_breakpoint_p (struct breakpoint *b)
+pending_breakpoint_p (const breakpoint *b)
 {
   return !b->has_locations ();
 }
@@ -7277,7 +7318,7 @@ describe_other_breakpoints (struct gdbarch *gdbarch,
    zero.  */
 
 static bool
-bl_address_is_meaningful (bp_location *loc)
+bl_address_is_meaningful (const bp_location *loc)
 {
   return loc->loc_type != bp_loc_other;
 }
@@ -7517,7 +7558,7 @@ adjust_breakpoint_address (struct gdbarch *gdbarch,
 	}
 
       adjusted_bpaddr
-	= gdbarch_remove_non_address_bits (gdbarch, adjusted_bpaddr);
+	= gdbarch_remove_non_address_bits_breakpoint (gdbarch, adjusted_bpaddr);
 
       /* An adjusted breakpoint address can significantly alter
 	 a user's expectations.  Print a warning if an adjustment
@@ -8572,7 +8613,6 @@ code_breakpoint::add_location (const symtab_and_line &sal)
   new_loc->symtab = sal.symtab;
   new_loc->symbol = sal.symbol;
   new_loc->msymbol = sal.msymbol;
-  new_loc->objfile = sal.objfile;
 
   breakpoint::add_location (*new_loc);
 
@@ -9355,7 +9395,8 @@ create_breakpoint (struct gdbarch *gdbarch,
   if (canonical.lsals.size () > 1)
     {
       warning (_("Multiple breakpoints were set.\nUse the "
-		 "\"delete\" command to delete unwanted breakpoints."));
+		 "\"%ps\" command to delete unwanted breakpoints."),
+	       styled_string (command_style.style (), "delete"));
       prev_breakpoint_count = prev_bkpt_count;
     }
 
@@ -10459,45 +10500,6 @@ watch_command_1 (const char *arg, int accessflag, int from_tty,
      'wp_frame'.  */
   frame_id watchpoint_frame = get_frame_id (wp_frame);
 
-  /* If the expression is "local", then set up a "watchpoint scope"
-     breakpoint at the point where we've left the scope of the watchpoint
-     expression.  Create the scope breakpoint before the watchpoint, so
-     that we will encounter it first in bpstat_stop_status.  */
-  if (exp_valid_block != NULL && wp_frame != NULL)
-    {
-      frame_id caller_frame_id = frame_unwind_caller_id (wp_frame);
-
-      if (frame_id_p (caller_frame_id))
-	{
-	  gdbarch *caller_arch = frame_unwind_caller_arch (wp_frame);
-	  CORE_ADDR caller_pc = frame_unwind_caller_pc (wp_frame);
-
-	  scope_breakpoint
-	    = create_internal_breakpoint (caller_arch, caller_pc,
-					  bp_watchpoint_scope);
-
-	  /* create_internal_breakpoint could invalidate WP_FRAME.  */
-	  wp_frame = NULL;
-
-	  scope_breakpoint->enable_state = bp_enabled;
-
-	  /* Automatically delete the breakpoint when it hits.  */
-	  scope_breakpoint->disposition = disp_del;
-
-	  /* Only break in the proper frame (help with recursion).  */
-	  scope_breakpoint->frame_id = caller_frame_id;
-
-	  /* Set the address at which we will stop.  */
-	  bp_location &loc = scope_breakpoint->first_loc ();
-	  loc.gdbarch = caller_arch;
-	  loc.requested_address = caller_pc;
-	  loc.address
-	    = adjust_breakpoint_address (loc.gdbarch, loc.requested_address,
-					 scope_breakpoint->type,
-					 current_program_space);
-	}
-    }
-
   /* Now set up the breakpoint.  We create all watchpoints as hardware
      watchpoints here even if hardware watchpoints are turned off, a call
      to update_watchpoint later in this function will cause the type to
@@ -10512,9 +10514,9 @@ watch_command_1 (const char *arg, int accessflag, int from_tty,
 
   std::unique_ptr<watchpoint> w;
   if (use_mask)
-    w.reset (new masked_watchpoint (nullptr, bp_type));
+    w = std::make_unique<masked_watchpoint> (nullptr, bp_type);
   else
-    w.reset (new watchpoint (nullptr, bp_type));
+    w = std::make_unique<watchpoint> (nullptr, bp_type);
 
   /* At most one of thread or task can be set on a watchpoint.  */
   gdb_assert (thread == -1 || task == -1);
@@ -10568,14 +10570,6 @@ watch_command_1 (const char *arg, int accessflag, int from_tty,
       w->watchpoint_thread = null_ptid;
     }
 
-  if (scope_breakpoint != NULL)
-    {
-      /* The scope breakpoint is related to the watchpoint.  We will
-	 need to act on them together.  */
-      w->related_breakpoint = scope_breakpoint;
-      scope_breakpoint->related_breakpoint = w.get ();
-    }
-
   if (!just_location)
     value_free_to_mark (mark);
 
@@ -10583,7 +10577,60 @@ watch_command_1 (const char *arg, int accessflag, int from_tty,
      that should be inserted.  */
   update_watchpoint (w.get (), true /* reparse */);
 
+  /* If the expression is "local", then set up a "watchpoint scope"
+     breakpoint at the point where we've left the scope of the watchpoint
+     expression.  Create the scope breakpoint before the watchpoint, so
+     that we will encounter it first in bpstat_stop_status.  */
+  if (exp_valid_block != nullptr && wp_frame != nullptr)
+    {
+      frame_id caller_frame_id = frame_unwind_caller_id (wp_frame);
+
+      if (frame_id_p (caller_frame_id))
+	{
+	  gdbarch *caller_arch = frame_unwind_caller_arch (wp_frame);
+	  CORE_ADDR caller_pc = frame_unwind_caller_pc (wp_frame);
+
+	  scope_breakpoint
+	    = create_internal_breakpoint (caller_arch, caller_pc,
+					  bp_watchpoint_scope);
+
+	  /* create_internal_breakpoint could invalidate WP_FRAME.  */
+	  wp_frame = nullptr;
+
+	  scope_breakpoint->enable_state = bp_enabled;
+
+	  /* Automatically delete the breakpoint when it hits.  */
+	  scope_breakpoint->disposition = disp_del;
+
+	  /* Only break in the proper frame (help with recursion).  */
+	  scope_breakpoint->frame_id = caller_frame_id;
+
+	  /* Set the address at which we will stop.  */
+	  bp_location &loc = scope_breakpoint->first_loc ();
+	  loc.gdbarch = caller_arch;
+	  loc.requested_address = caller_pc;
+	  loc.address
+	    = adjust_breakpoint_address (loc.gdbarch, loc.requested_address,
+					 scope_breakpoint->type,
+					 current_program_space);
+	}
+  }
+
+  if (scope_breakpoint != nullptr)
+    {
+      /* The scope breakpoint is related to the watchpoint.  We will
+	 need to act on them together.  */
+      w->related_breakpoint = scope_breakpoint;
+      scope_breakpoint->related_breakpoint = w.get ();
+    }
+
+  /* Verify that the scope breakpoint comes before the watchpoint in the
+     breakpoint chain.  */
+  gdb_assert (scope_breakpoint == nullptr
+	      || &breakpoint_chain.back () == scope_breakpoint);
+  watchpoint *watchpoint_ptr = w.get ();
   install_breakpoint (internal, std::move (w), 1);
+  gdb_assert (&breakpoint_chain.back () == watchpoint_ptr);
 }
 
 /* Return count of debug registers needed to watch the given expression.
@@ -11077,7 +11124,7 @@ clear_command (const char *arg, int from_tty)
 	}
     }
 
-  /* Now go thru the 'found' chain and delete them.  */
+  /* Now go through the 'found' chain and delete them.  */
   if (found.empty ())
     {
       if (arg)
@@ -12709,25 +12756,18 @@ all_locations_are_pending (struct breakpoint *b, struct program_space *pspace)
 static bool
 ambiguous_names_p (const bp_location_range &locs)
 {
-  htab_up htab (htab_create_alloc (13, htab_hash_string, htab_eq_string, NULL,
-				   xcalloc, xfree));
+  gdb::unordered_set<std::string_view> htab;
 
   for (const bp_location &l : locs)
     {
-      const char **slot;
       const char *name = l.function_name.get ();
 
       /* Allow for some names to be NULL, ignore them.  */
       if (name == NULL)
 	continue;
 
-      slot = (const char **) htab_find_slot (htab.get (), (const void *) name,
-					     INSERT);
-      /* NOTE: We can assume slot != NULL here because xcalloc never
-	 returns NULL.  */
-      if (*slot != NULL)
+      if (!htab.insert (name).second)
 	return true;
-      *slot = name;
     }
 
   return false;
@@ -12943,31 +12983,11 @@ update_breakpoint_locations (code_breakpoint *b,
      all locations are in the same shared library, that was unloaded.
      We'd like to retain the location, so that when the library is
      loaded again, we don't loose the enabled/disabled status of the
-     individual locations.
-
-     Thread specific breakpoints will also trigger this case if the thread
-     is changed to a different program space, and all of the old locations
-     go out of scope.  In this case we do (currently) discard the old
-     locations -- we assume the change in thread is permanent and the old
-     locations will never come back into scope.  */
+     individual locations.  */
   if (all_locations_are_pending (b, filter_pspace) && sals.empty ())
-    {
-      if (b->thread != -1)
-	b->clear_locations ();
-      return;
-    }
+    return;
 
   bp_location_list existing_locations = b->steal_locations (filter_pspace);
-
-  /* If this is a thread-specific breakpoint then any locations left on the
-     breakpoint are for a program space in which the thread of interest
-     does not operate.  This can happen when the user changes the thread of
-     a thread-specific breakpoint.
-
-     We assume that the change in thread is permanent, and that the old
-     locations will never be used again, so discard them now.  */
-  if (b->thread != -1)
-    b->clear_locations ();
 
   for (const auto &sal : sals)
     {
@@ -13005,53 +13025,53 @@ update_breakpoint_locations (code_breakpoint *b,
     }
 
   /* If possible, carry over 'disable' status from existing
-     breakpoints.  */
-  {
-    /* If there are multiple breakpoints with the same function name,
-       e.g. for inline functions, comparing function names won't work.
-       Instead compare pc addresses; this is just a heuristic as things
-       may have moved, but in practice it gives the correct answer
-       often enough until a better solution is found.  */
-    int have_ambiguous_names = ambiguous_names_p (b->locations ());
+     breakpoints.
 
-    for (const bp_location &e : existing_locations)
-      {
-	if ((!e.enabled || e.disabled_by_cond) && e.function_name)
-	  {
-	    if (have_ambiguous_names)
+     If there are multiple breakpoints with the same function name,
+     e.g. for inline functions, comparing function names won't work.
+     Instead compare pc addresses; this is just a heuristic as things
+     may have moved, but in practice it gives the correct answer
+     often enough until a better solution is found.  */
+  bool have_ambiguous_names = ambiguous_names_p (b->locations ());
+
+  for (const bp_location &e : existing_locations)
+    {
+      if (e.function_name == nullptr
+	  || (e.enabled && !e.disabled_by_cond))
+	continue;
+
+      if (have_ambiguous_names)
+	{
+	  for (bp_location &l : b->locations ())
+	    {
+	      /* Ignore software vs hardware location type at
+		 this point, because with "set breakpoint
+		 auto-hw", after a re-set, locations that were
+		 hardware can end up as software, or vice versa.
+		 As mentioned above, this is an heuristic and in
+		 practice should give the correct answer often
+		 enough.  */
+	      if (breakpoint_locations_match (&e, &l, true))
+		{
+		  l.enabled = e.enabled;
+		  l.disabled_by_cond = e.disabled_by_cond;
+		  break;
+		}
+	    }
+	}
+      else
+	{
+	  for (bp_location &l : b->locations ())
+	    if (l.function_name
+		&& strcmp (e.function_name.get (),
+			   l.function_name.get ()) == 0)
 	      {
-		for (bp_location &l : b->locations ())
-		  {
-		    /* Ignore software vs hardware location type at
-		       this point, because with "set breakpoint
-		       auto-hw", after a re-set, locations that were
-		       hardware can end up as software, or vice versa.
-		       As mentioned above, this is an heuristic and in
-		       practice should give the correct answer often
-		       enough.  */
-		    if (breakpoint_locations_match (&e, &l, true))
-		      {
-			l.enabled = e.enabled;
-			l.disabled_by_cond = e.disabled_by_cond;
-			break;
-		      }
-		  }
+		l.enabled = e.enabled;
+		l.disabled_by_cond = e.disabled_by_cond;
+		break;
 	      }
-	    else
-	      {
-		for (bp_location &l : b->locations ())
-		  if (l.function_name
-		      && strcmp (e.function_name.get (),
-				 l.function_name.get ()) == 0)
-		    {
-		      l.enabled = e.enabled;
-		      l.disabled_by_cond = e.disabled_by_cond;
-		      break;
-		    }
-	      }
-	  }
-      }
-  }
+	}
+    }
 
   if (!locations_are_equal (existing_locations, b->locations ()))
     notify_breakpoint_modified (b);
@@ -14681,8 +14701,30 @@ void
 breakpoint_free_objfile (struct objfile *objfile)
 {
   for (bp_location *loc : all_bp_locations ())
-    if (loc->symtab != NULL && loc->symtab->compunit ()->objfile () == objfile)
-      loc->symtab = NULL;
+    {
+      if (loc->symtab != nullptr
+	  && loc->symtab->compunit ()->objfile () == objfile)
+	{
+	  loc->symtab = nullptr;
+	  loc->symbol = nullptr;
+	  loc->msymbol = nullptr;
+	}
+
+      if (loc->section != nullptr
+	  && loc->section->objfile == objfile)
+	{
+	  /* If symtab was set then it should have already been cleared.
+	     But if bp_location::msymbol was set then the symbol and symtab
+	     might already have been nullptr.  */
+	  gdb_assert (loc->symtab == nullptr);
+	  loc->section = nullptr;
+	  loc->symbol = nullptr;
+	  loc->msymbol = nullptr;
+	}
+
+      if (loc->probe.objfile == objfile)
+	loc->probe = bound_probe ();
+    }
 }
 
 /* Chain containing all defined "enable breakpoint" subcommands.  */

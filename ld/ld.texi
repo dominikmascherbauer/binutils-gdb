@@ -1,6 +1,6 @@
 \input texinfo
 @setfilename ld.info
-@c Copyright (C) 1991-2024 Free Software Foundation, Inc.
+@c Copyright (C) 1991-2025 Free Software Foundation, Inc.
 @syncodeindex ky cp
 @c man begin INCLUDE
 @include configdoc.texi
@@ -30,7 +30,6 @@
 @set MMIX
 @set MSP430
 @set NDS32
-@set NIOSII
 @set PDP11
 @set POWERPC
 @set POWERPC64
@@ -57,7 +56,7 @@ This file documents the @sc{gnu} linker LD
 @end ifset
 version @value{VERSION}.
 
-Copyright @copyright{} 1991-2024 Free Software Foundation, Inc.
+Copyright @copyright{} 1991-2025 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3
@@ -94,7 +93,7 @@ section entitled ``GNU Free Documentation License''.
 
 @vskip 0pt plus 1filll
 @c man begin COPYRIGHT
-Copyright @copyright{} 1991-2024 Free Software Foundation, Inc.
+Copyright @copyright{} 1991-2025 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3
@@ -1127,6 +1126,18 @@ relocations.  Different output formats can have further restrictions; for
 example some @code{a.out}-based formats do not support partial linking
 with input files in other formats at all.
 
+When the relocatable output contains both contents which require
+link-time optimization (LTO) and contents which don't require LTO,
+a .gnu_object_only section will be created to contain a relocatable
+object file, as if @samp{-r} is applied to all relocatable inputs
+which don't require LTO.  When processing a relocatable input with
+a .gnu_object_only section, the linker will extract the .gnu_object_only
+section as a separate input.
+
+Note that since @samp{-r} groups some sections from different input files
+together, there may be negative impacts on code size and locality in
+final executable or shared library.
+
 This option does the same thing as @samp{-i}.
 
 @kindex -R @var{file}
@@ -1590,6 +1601,14 @@ i386 and x86-64.
 Disable relocation overflow check.  This can be used to disable
 relocation overflow check if there will be no dynamic relocation
 overflow at run-time.  Supported for x86_64.
+
+@item memory-seal
+@item nomemory-seal
+Instruct the executable or shared library that the all PT_LOAD segments
+should be sealed to avoid further manipulation (such as changing the
+protection flags, the segment size, or remove the mapping).
+This is a security hardening that requires system support.  This
+generates GNU_PROPERTY_MEMORY_SEAL in .note.gnu.property section
 
 @item now
 When generating an executable or shared library, mark it to tell the
@@ -2406,9 +2425,6 @@ This option is only supported on a few targets.
 @ifset M68HC11
 @xref{M68HC11/68HC12,,@command{ld} and the 68HC11 and 68HC12}.
 @end ifset
-@ifset NIOSII
-@xref{Nios II,,@command{ld} and the Altera Nios II}.
-@end ifset
 @ifset POWERPC
 @xref{PowerPC ELF32,,@command{ld} and PowerPC 32-bit ELF Support}.
 @end ifset
@@ -2732,6 +2748,19 @@ for compatibility with other linkers, you may omit the leading
 should be no white space between @var{sectionname}, the equals
 sign (``@key{=}''), and @var{org}.
 
+@kindex --image-base=@var{org}
+@item --image-base=@var{org}
+@cindex image base address, cmd line
+When using ELF, same as @option{-Ttext-segment}, with both options effectively
+setting the base address of the ELF executable.
+
+When using PE, use @var{value} as the base address of your program or dll.
+This is the lowest memory location that will be used when your program or
+dll is loaded.  To reduce the need to relocate and improve performance of
+your dlls, each should have a unique base address and not overlap any
+other dlls.  The default is 0x400000 for executables, and 0x10000000
+for dlls.
+
 @kindex -Tbss=@var{org}
 @kindex -Tdata=@var{org}
 @kindex -Ttext=@var{org}
@@ -2746,7 +2775,7 @@ Same as @option{--section-start}, with @code{.bss}, @code{.data} or
 @item -Ttext-segment=@var{org}
 @cindex text segment origin, cmd line
 When creating an ELF executable, it will set the address of the first
-byte of the text segment.  Note that when @option{-pie} is used with
+byte of the first segment.  Note that when @option{-pie} is used with
 @option{-Ttext-segment=@var{org}}, the output executable is marked
 ET_EXEC so that the address of the first byte of the text segment will
 be guaranteed to be @var{org} at run time.
@@ -3240,6 +3269,11 @@ Request the creation of a @code{.note.package} ELF note section.  The
 contents of the note are in JSON format, as per the package metadata
 specification.  For more information see:
 https://systemd.io/ELF_PACKAGE_METADATA/
+The JSON argument support percent-encoding and following %[string]
+(where string refers to the name in HTML's Named Character References)
+encoding: @samp{%[comma]} for @samp{,}, @samp{%[lbrace]} for @samp{@{},
+@samp{%[quot]} for @samp{"}, @samp{%[rbrace]} for @samp{@}}, and
+@samp{%[space]} for space character.
 If the JSON argument is missing/empty then this will disable the
 creation of the metadata note, if one had been enabled by an earlier
 occurrence of the --package-metadata option.
@@ -3390,17 +3424,6 @@ file offsets which are multiples of this number.  This defaults to
 Specify the number of bytes of memory to reserve (and optionally commit)
 to be used as heap for this program.  The default is 1MB reserved, 4K
 committed.
-[This option is specific to the i386 PE targeted port of the linker]
-
-@cindex image base
-@kindex --image-base
-@item --image-base @var{value}
-Use @var{value} as the base address of your program or dll.  This is
-the lowest memory location that will be used when your program or dll
-is loaded.  To reduce the need to relocate and improve performance of
-your dlls, each should have a unique base address and not overlap any
-other dlls.  The default is 0x400000 for executables, and 0x10000000
-for dlls.
 [This option is specific to the i386 PE targeted port of the linker]
 
 @kindex --kill-at
@@ -5967,19 +5990,19 @@ special requirements of the section type are met.
 Note - the TYPE only is used if some or all of the contents of the
 section do not have an implicit type of their own.  So for example:
 @smallexample
-  .foo . TYPE = SHT_PROGBITS @{ *(.bar) @}
+  .foo . (TYPE = SHT_PROGBITS) : @{ *(.bar) @}
 @end smallexample
 will set the type of section @samp{.foo} to the type of the section
 @samp{.bar} in the input files, which may not be the SHT_PROGBITS
 type.  Whereas:
 @smallexample
-  .foo . TYPE = SHT_PROGBITS @{ BYTE(1) @}
+  .foo . (TYPE = SHT_PROGBITS) : @{ BYTE(1) @}
 @end smallexample
 will set the type of @samp{.foo} to SHT_PROGBBITS.  If it is necessary
 to override the type of incoming sections and force the output section
 type then an extra piece of untyped data will be needed:
 @smallexample
-  .foo . TYPE = SHT_PROGBITS @{ BYTE(1); *(.bar) @}
+  .foo . (TYPE = SHT_PROGBITS) : @{ BYTE(1); *(.bar) @}
 @end smallexample
 
 @item READONLY ( TYPE = @var{type} )
@@ -7621,7 +7644,6 @@ command line option. @xref{Options}.
 
 @menu
 * libdep Plugin::	Static Library Dependencies Plugin
-* lto Plugin::          LTO Plugin
 @end menu
 
 @node libdep Plugin
@@ -7659,24 +7681,6 @@ the @samp{__.LIBDEP} member of @file{libssl.a} would contain
 @smallexample
 -L/usr/local/lib -lcrypto
 @end smallexample
-
-Note any library search directories added in this way are only used to
-search for libraries which are also added the same plugin.  They are
-not used for searching for libraries specified on the linker command
-line, linker scripts or other plugins.  This does however present a
-problem if multiple archives with @samp{__.LIBDEP} entries are present
-as they will all be handled by the libdep plugin and thus they will
-share library search paths.  This could result in a library being
-loaded from an unexpected location.
-
-@node lto Plugin
-@section LTO Plugin
-Although not shipped with the binutils the LTO Plugin from the GCC
-project is nevertheless a plugin that is designed to work with the
-linker.  The plugin intercepts object files as they are loaded by the
-linker and instead sends them to the LTO compiler.  When that compiler
-finishes the resulting object file(s) are passed back to the linker
-for normal processing.
 
 @node Special Sections
 @chapter Special Sections
@@ -7759,9 +7763,6 @@ functionality are not listed.
 @end ifset
 @ifset NDS32
 * NDS32::			@command{ld} and NDS32
-@end ifset
-@ifset NIOSII
-* Nios II::			@command{ld} and the Altera Nios II
 @end ifset
 @ifset POWERPC
 * PowerPC ELF32::		@command{ld} and PowerPC 32-bit ELF Support
@@ -8054,9 +8055,9 @@ in certain ARM1176 processors.  The workaround is enabled by default if you
 are targeting ARM v6 (excluding ARM v6T2) or earlier.  It can be disabled
 unconditionally by specifying @samp{--no-fix-arm1176}.
 
-Further information is available in the ``ARM1176JZ-S and ARM1176JZF-S
-Programmer Advice Notice'' available on the ARM documentation website at:
-http://infocenter.arm.com/.
+Further information is available in ``ARM1176JZ-S and ARM1176JZF-S
+Programmer Advice Notice'' (UAN0002) available on the Arm documentation
+website at @uref{https://developer.arm.com/}.
 
 @cindex STM32L4xx erratum workaround
 @kindex --fix-stm32l4xx-629360
@@ -8209,6 +8210,82 @@ library.  A warning is also given if some symbols present in the input import
 library have disappeared from the executable.  This option is only effective
 for Secure Gateway import libraries, ie. when @samp{--cmse-implib} is
 specified.
+
+@kindex -z force-bti
+@cindex Protect PLTs with Branch Target Identification
+The @samp{-z force-bti} option turns on the verification of Branch Target
+Identification (BTI) in input objects, generates PLTs with BTI, and marks the
+output with BTI.  If this option is omitted, but all input objects belonging to
+the link unit have the BTI marking, the linker implicitly generates PLTs with
+BTI, and marks the output with BTI.
+
+@kindex -z bti-report[=none|warning|error]
+@cindex Control warnings for missing BTI markings.
+The @samp{-z bti-report[=none|warning|error]} option specifies how to report
+missing BTI markings on inputs, i.e. the GNU_PROPERTY_AARCH64_FEATURE_1_BTI
+property.
+By default, if the option is omitted and @samp{-z force-bti} is provided,
+warnings are emitted.
+@itemize
+@item @samp{none} disables any warning messages.
+@item @samp{warning} (the default value) emits warning messages when input objects
+composing the link unit are missing BTI markings.
+@item @samp{error} turns the warning messages into errors.
+@end itemize
+If issues are found, a maximum of 20 messages will be emitted, and then a summary
+with the total number of issues will be displayed at the end.
+
+@kindex -z pac-plt
+@cindex Protect PLTs with Returned Pointer Authentication
+The @samp{-z pac-plt} option enables the usage of pointer authentication in PLTs.
+
+@kindex -z gcs=[always|never|implicit]
+@cindex Controls whether the output object supports the Guarded Control Stack (GCS) mechanism.
+The @samp{-z gcs} option controls the verification of Guarded Control Stack (GCS)
+markings on input objects and marks the output with GCS if all conditions are
+validated.
+@itemize
+@item @samp{implicit} (default if @samp{-z gcs} is omitted) enables GCS marking
+on the output if, and only if, all input objects composing the link unit are
+marked with GCS.
+@item @samp{always} forces the marking of the output with GCS.
+@item @samp{never} ignores any GCS marking on the input objects, and does not
+mark the output with GCS.
+@end itemize
+
+@kindex -z gcs-report[=none|warning|error]
+@cindex Control warnings for missing GCS markings.
+The @samp{-z gcs-report[=none|warning|error]} option specifies how to report the
+missing GCS markings on inputs, i.e. the GNU_PROPERTY_AARCH64_FEATURE_1_GCS
+property. By default, if the option is omitted and @samp{-z gcs} is provided,
+warnings are emitted.
+@itemize
+@item @samp{none} disables any warning messages.
+@item @samp{warning} (the default value) emits warning messages when input objects
+composing the link unit are missing GCS markings.
+@item @samp{error} turns the warning messages into errors.
+@end itemize
+If issues are found, a maximum of 20 messages will be emitted, and then a summary
+with the total number of issues will be displayed at the end.
+
+@kindex -z gcs-report-dynamic=none|warning|error
+@cindex Control warnings for missing GCS markings on dynamic input objects.
+The @samp{-z gcs-report-dynamic=none|warning|error} option specifies how to
+report the missing GCS markings on dynamic input objects, i.e. the
+GNU_PROPERTY_AARCH64_FEATURE_1_GCS property. By default, if the option is
+omitted, it inherits the value of @samp{-z gcs-report}. However, the inherited
+value is capped to @samp{warning} as some user might want to only report errors
+in the currently built module, and not the shared dependencies. It is therefore
+necessary to use an explicit @samp{-z gcs-report-dynamic=error} option if you
+want the linker to error on GCS issues in the shared libraries.
+@itemize
+@item @samp{none} disables any warning messages.
+@item @samp{warning} emits warning messages when dynamic objects are missing
+GCS markings.
+@item @samp{error} turns the warning messages into errors.
+@end itemize
+If issues are found, a maximum of 20 messages will be emitted, and then a summary
+with the total number of issues will be displayed at the end.
 
 @ifclear GENERIC
 @lowersections
@@ -8462,43 +8539,6 @@ Disable/enable the link-time IFC optimization.
 @item @samp{--mifc-loop-aware}
 Avoid generating the IFC instruction inside the loop.
 @end table
-
-@ifclear GENERIC
-@lowersections
-@end ifclear
-@end ifset
-
-@ifset NIOSII
-@ifclear GENERIC
-@raisesections
-@end ifclear
-
-@node Nios II
-@section @command{ld} and the Altera Nios II
-@cindex Nios II call relaxation
-@kindex --relax on Nios II
-
-Call and immediate jump instructions on Nios II processors are limited to
-transferring control to addresses in the same 256MB memory segment,
-which may result in @command{ld} giving
-@samp{relocation truncated to fit} errors with very large programs.
-The command-line option @option{--relax} enables the generation of
-trampolines that can access the entire 32-bit address space for calls
-outside the normal @code{call} and @code{jmpi} address range.  These
-trampolines are inserted at section boundaries, so may not themselves
-be reachable if an input section and its associated call trampolines are
-larger than 256MB.
-
-The @option{--relax} option is enabled by default unless @option{-r}
-is also specified.  You can disable trampoline generation by using the
-@option{--no-relax} linker option.  You can also disable this optimization
-locally by using the @samp{set .noat} directive in assembly-language
-source files, as the linker-inserted trampolines use the @code{at}
-register as a temporary.
-
-Note that the linker @option{--relax} option is independent of assembler
-relaxation options, and that using the GNU assembler's @option{-relax-all}
-option interferes with the linker's more selective call instruction relaxation.
 
 @ifclear GENERIC
 @lowersections

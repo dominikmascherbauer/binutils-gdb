@@ -1,5 +1,5 @@
 /* tc-bfin.c -- Assembler for the ADI Blackfin.
-   Copyright (C) 2005-2024 Free Software Foundation, Inc.
+   Copyright (C) 2005-2025 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -314,13 +314,13 @@ struct bfin_cpu bfin_cpus[] =
 };
 
 /* Define bfin-specific command-line options (there are none). */
-const char *md_shortopts = "";
+const char md_shortopts[] = "";
 
 #define OPTION_FDPIC		(OPTION_MD_BASE)
 #define OPTION_NOPIC		(OPTION_MD_BASE + 1)
 #define OPTION_MCPU		(OPTION_MD_BASE + 2)
 
-struct option md_longopts[] =
+const struct option md_longopts[] =
 {
   { "mcpu",		required_argument,	NULL, OPTION_MCPU	},
   { "mfdpic",		no_argument,		NULL, OPTION_FDPIC      },
@@ -329,7 +329,7 @@ struct option md_longopts[] =
   { NULL,		no_argument,		NULL, 0                 },
 };
 
-size_t md_longopts_size = sizeof (md_longopts);
+const size_t md_longopts_size = sizeof (md_longopts);
 
 
 int
@@ -798,10 +798,10 @@ tc_gen_reloc (asection *seg ATTRIBUTE_UNUSED, fixS *fixp)
 {
   arelent *reloc;
 
-  reloc		      = XNEW (arelent);
-  reloc->sym_ptr_ptr  = XNEW (asymbol *);
+  reloc = notes_alloc (sizeof (arelent));
+  reloc->sym_ptr_ptr = notes_alloc (sizeof (asymbol *));
   *reloc->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_addsy);
-  reloc->address      = fixp->fx_frag->fr_address + fixp->fx_where;
+  reloc->address = fixp->fx_frag->fr_address + fixp->fx_where;
 
   reloc->addend = fixp->fx_offset;
   reloc->howto = bfd_reloc_type_lookup (stdoutput, fixp->fx_r_type);
@@ -812,9 +812,6 @@ tc_gen_reloc (asection *seg ATTRIBUTE_UNUSED, fixS *fixp)
 		    /* xgettext:c-format.  */
 		    _("reloc %d not supported by object file format"),
 		    (int) fixp->fx_r_type);
-
-      xfree (reloc);
-
       return NULL;
     }
 
@@ -1942,7 +1939,8 @@ bfin_eol_in_insn (char *line)
 
   /* If the || is on the next line, there might be leading whitespace.  */
   temp++;
-  while (*temp == ' ' || *temp == '\t') temp++;
+  while (is_whitespace (*temp))
+    temp++;
 
   if (*temp == '|')
     return true;

@@ -1,6 +1,6 @@
 ## Process this file with automake to generate Makefile.in
 #
-#   Copyright (C) 2021-2024 Free Software Foundation, Inc.
+#   Copyright (C) 2021-2025 Free Software Foundation, Inc.
 #
 # This file is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -92,7 +92,6 @@ CSOURCES = \
 	dbe_hwcdrv.c \
 	dbe_hwcfuncs.c \
 	dbe_hwctable.c \
-	dbe_memmgr.c \
 	gethrtime.c \
 	$(NULL)
 
@@ -153,25 +152,37 @@ dbedir = $(SYSCONFDIR)
 dbe_DATA = $(srcdir)/gprofng.rc
 
 
-bin_PROGRAMS = gp-archive gp-collect-app gprofng gp-display-text gp-display-src
+bin_PROGRAMS = gprofng-archive gprofng-collect-app gprofng \
+	gprofng-display-text gprofng-display-src
 
-gp_archive_SOURCES = gp-archive.cc ArchiveExp.cc
-gp_archive_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
+gprofng_archive_SOURCES = gp-archive.cc ArchiveExp.cc
+gprofng_archive_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
 
-gp_collect_app_SOURCES = gp-collect-app.cc checks.cc envsets.cc count.cc
-gp_collect_app_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
+gprofng_collect_app_SOURCES = gp-collect-app.cc checks.cc envsets.cc count.cc
+gprofng_collect_app_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
 
 gprofng_SOURCES = gprofng.cc
 gprofng_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
 
-gp_display_src_SOURCES = gp-display-src.cc
-gp_display_src_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
+gprofng_display_src_SOURCES = gp-display-src.cc
+gprofng_display_src_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
 
-gp_display_text_SOURCES = gp-display-text.cc ipc.cc ipcio.cc
-gp_display_text_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
+gprofng_display_text_SOURCES = gp-display-text.cc ipc.cc ipcio.cc
+gprofng_display_text_LDADD = $(LIBGPROFNG) $(CLOCK_GETTIME_LINK) $(ZLIB)
 
 # Distribution involves building the binaries to generate the manpage,
 # so ensure that the necessary libraries are built at dist time.
 dist-hook: $(LIBGPROFNG)
 
 $(srcdir)/DbeSession.cc: QLParser.tab.hh
+
+.PHONY: install-exec-local
+install-exec-local:
+	$(mkinstalldirs) $(DESTDIR)$(bindir)
+	rm -f $(DESTDIR)$(bindir)/gp-{archive,collect-app,display-html,display-src,display-text}
+	ln -s gprofng-archive $(DESTDIR)$(bindir)/gp-archive
+	ln -s gprofng-collect-app $(DESTDIR)$(bindir)/gp-collect-app
+	ln -s gprofng-display-html $(DESTDIR)$(bindir)/gp-display-html
+	ln -s gprofng-display-src $(DESTDIR)$(bindir)/gp-display-src
+	ln -s gprofng-display-text $(DESTDIR)$(bindir)/gp-display-text
+

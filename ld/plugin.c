@@ -1,5 +1,5 @@
 /* Plugin control for the GNU linker.
-   Copyright (C) 2010-2024 Free Software Foundation, Inc.
+   Copyright (C) 2010-2025 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -315,13 +315,11 @@ plugin_opt_plugin_arg (const char *arg)
 static bfd *
 plugin_get_ir_dummy_bfd (const char *name, bfd *srctemplate)
 {
-  bfd *abfd;
-  bool bfd_plugin_target;
-
-  bfd_use_reserved_id = 1;
-  bfd_plugin_target = bfd_plugin_target_p (srctemplate->xvec);
-  abfd = bfd_create (concat (name, IRONLY_SUFFIX, (const char *) NULL),
-		     bfd_plugin_target ? link_info.output_bfd : srctemplate);
+  bool bfd_plugin_target = bfd_plugin_target_p (srctemplate->xvec);
+  char *filename = concat (name, IRONLY_SUFFIX, (const char *) NULL);
+  bfd *abfd = bfd_create (filename, (bfd_plugin_target
+				     ? link_info.output_bfd : srctemplate));
+  free (filename);
   if (abfd != NULL)
     {
       abfd->flags |= BFD_LINKER_CREATED | BFD_PLUGIN;
@@ -368,7 +366,8 @@ asymbol_from_plugin_symbol (bfd *abfd, asymbol *asym,
 
   asym->the_bfd = abfd;
   asym->name = (ldsym->version
-		? concat (ldsym->name, "@", ldsym->version, (const char *) NULL)
+		? stat_concat (ldsym->name, "@", ldsym->version,
+			       (const char *) NULL)
 		: ldsym->name);
   asym->value = 0;
   switch (ldsym->def)
@@ -380,11 +379,11 @@ asymbol_from_plugin_symbol (bfd *abfd, asymbol *asym,
       flags |= BSF_GLOBAL;
       if (ldsym->comdat_key)
 	{
-	  char *name = concat (".gnu.linkonce.t.", ldsym->comdat_key,
-			       (const char *) NULL);
+	  char *name = stat_concat (".gnu.linkonce.t.", ldsym->comdat_key,
+				    (const char *) NULL);
 	  section = bfd_get_section_by_name (abfd, name);
 	  if (section != NULL)
-	    free (name);
+	    stat_free (name);
 	  else
 	    {
 	      flagword sflags;
@@ -933,7 +932,7 @@ add_input_file (const char *pathname)
 			    NULL);
   if (!is)
     return LDPS_ERR;
-  is->plugin = called_plugin;
+  is->flags.lto_output = 1;
   return LDPS_OK;
 }
 
@@ -948,23 +947,17 @@ add_input_library (const char *pathname)
 			    NULL);
   if (!is)
     return LDPS_ERR;
-  is->plugin = called_plugin;
+  is->flags.lto_output = 1;
   return LDPS_OK;
 }
 
 /* Set the extra library path to be used by libraries added via
    add_input_library.  */
-
 static enum ld_plugin_status
 set_extra_library_path (const char *path)
 {
-  search_dirs_type * sdt;
-
   ASSERT (called_plugin);
-  sdt = ldfile_add_library_path (xstrdup (path), search_dir_plugin);
-  if (sdt == NULL)
-    return LDPS_ERR;
-  sdt->plugin = called_plugin;
+  ldfile_add_library_path (xstrdup (path), false);
   return LDPS_OK;
 }
 
@@ -1128,7 +1121,7 @@ plugin_load_plugins (void)
     }
 
   /* Allocate tv array and initialise constant part.  */
-  my_tv = xmalloc ((max_args + 1 + tv_header_size) * sizeof *my_tv);
+  my_tv = stat_alloc ((max_args + 1 + tv_header_size) * sizeof (*my_tv));
   set_tv_header (my_tv);
 
   /* Pass over plugins again, activating them.  */
@@ -1347,6 +1340,9 @@ plugin_maybe_claim (lang_input_statement_type *entry)
   if (plugin_object_p (entry->the_bfd, true))
     {
       bfd *abfd = entry->the_bfd->plugin_dummy_bfd;
+
+      /* Check object only section.  */
+      cmdline_check_object_only_section (entry->the_bfd, true);
 
       /* Discard the real file's BFD and substitute the dummy one.  */
 

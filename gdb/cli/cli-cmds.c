@@ -55,6 +55,7 @@
 #include "extension.h"
 #include "gdbsupport/pathstuff.h"
 #include "gdbsupport/gdb_tilde_expand.h"
+#include "gdbsupport/eintr.h"
 
 #ifdef TUI
 #include "tui/tui.h"
@@ -214,7 +215,7 @@ error_no_arg (const char *why)
 static void
 info_command (const char *arg, int from_tty)
 {
-  help_list (infolist, "info ", all_commands, gdb_stdout);
+  help_list (infolist, "info", all_commands, gdb_stdout);
 }
 
 /* See cli/cli-cmds.h.  */
@@ -921,7 +922,11 @@ run_under_shell (const char *arg, int from_tty)
     }
 
   if (pid != -1)
-    waitpid (pid, &status, 0);
+    {
+      int ret = gdb::waitpid (pid, &status, 0);
+      if (ret == -1)
+	perror_with_name ("Cannot get status of shell command");
+    }
   else
     error (_("Fork failed"));
   return status;
@@ -968,7 +973,8 @@ edit_command (const char *arg, int from_tty)
     {
       if (sal.symtab == 0)
 	error (_("No default source file yet."));
-      sal.line += get_lines_to_list () / 2;
+      if (get_first_line_listed () != 0)
+	sal.line = get_first_line_listed () + get_lines_to_list () / 2;
     }
   else
     {
@@ -1016,16 +1022,23 @@ edit_command (const char *arg, int from_tty)
 	  gdbarch = sal.symtab->compunit ()->objfile ()->arch ();
 	  sym = find_pc_function (sal.pc);
 	  if (sym)
-	    gdb_printf ("%s is in %s (%s:%d).\n",
-			paddress (gdbarch, sal.pc),
-			sym->print_name (),
-			symtab_to_filename_for_display (sal.symtab),
-			sal.line);
+	    gdb_printf ("%ps is in %ps (%ps:%ps).\n",
+			styled_string (address_style.style (),
+				       paddress (gdbarch, sal.pc)),
+			styled_string (function_name_style.style (),
+				       sym->print_name ()),
+			styled_string (file_name_style.style (),
+				       symtab_to_filename_for_display (sal.symtab)),
+			styled_string (line_number_style.style (),
+				       pulongest (sal.line)));
 	  else
-	    gdb_printf ("%s is at %s:%d.\n",
-			paddress (gdbarch, sal.pc),
-			symtab_to_filename_for_display (sal.symtab),
-			sal.line);
+	    gdb_printf ("%ps is at %ps:%ps.\n",
+			styled_string (address_style.style (),
+				       paddress (gdbarch, sal.pc)),
+			styled_string (file_name_style.style (),
+				       symtab_to_filename_for_display (sal.symtab)),
+			styled_string (line_number_style.style (),
+				       pulongest (sal.line)));
 	}
 
       /* If what was given does not imply a symtab, it must be an
@@ -1538,17 +1551,19 @@ print_disassembly (struct gdbarch *gdbarch, const char *name,
 static void
 disassemble_current_function (gdb_disassembly_flags flags)
 {
-  frame_info_ptr frame;
-  struct gdbarch *gdbarch;
-  CORE_ADDR low, high, pc;
-  const char *name;
-  const struct block *block;
+  frame_info_ptr frame = get_selected_frame (_("No frame selected."));
+  struct gdbarch *gdbarch = get_frame_arch (frame);
+  CORE_ADDR pc = get_frame_address_in_block (frame);
 
-  frame = get_selected_frame (_("No frame selected."));
-  gdbarch = get_frame_arch (frame);
-  pc = get_frame_address_in_block (frame);
-  if (find_pc_partial_function (pc, &name, &low, &high, &block) == 0)
+  const general_symbol_info *gsi;
+  const struct block *block;
+  CORE_ADDR low, high;
+  if (find_pc_partial_function_sym (pc, &gsi, &low, &high, &block) == 0)
     error (_("No function contains program counter for selected frame."));
+
+  gdb_assert (gsi != nullptr);
+  const char *name = asm_demangle ? gsi->print_name () : gsi->linkage_name ();
+
 #if defined(TUI)
   /* NOTE: cagney/2003-02-13 The `tui_active' was previously
      `tui_version'.  */
@@ -2383,6 +2398,11 @@ value_from_setting (const setting &var, struct gdbarch *gdbarch)
 
 	return current_language->value_string (gdbarch, value, len);
       }
+    case var_color:
+      {
+	std::string s = var.get<ui_file_style::color> ().to_string ();
+	return current_language->value_string (gdbarch, s.c_str (), s.size ());
+      }
     default:
       gdb_assert_not_reached ("bad var_type");
     }
@@ -2430,6 +2450,7 @@ str_value_from_setting (const setting &var, struct gdbarch *gdbarch)
     case var_pinteger:
     case var_boolean:
     case var_auto_boolean:
+    case var_color:
       {
 	std::string cmd_val = get_setshow_command_value_string (var);
 
@@ -2631,9 +2652,9 @@ to be printed or after trailing whitespace."));
 Set mode for script filename extension recognition."), _("\
 Show mode for script filename extension recognition."), _("\
 off  == no filename extension recognition (all sourced files are GDB scripts)\n\
-soft == evaluate script according to filename extension, fallback to GDB script"
-  "\n\
-strict == evaluate script according to filename extension, error if not supported"
+soft == evaluate script according to filename extension, fallback to GDB script\n\
+strict == evaluate script according to filename extension,\n\
+          error if not supported"
   ),
 			NULL,
 			show_script_ext_mode,
@@ -2728,9 +2749,10 @@ as 0 or -1 depending on the setting."),
 			 gdb_setting_internal_fn, NULL);
 
   add_internal_function ("_gdb_maint_setting_str", _("\
-$_gdb_maint_setting_str - returns the value of a GDB maintenance setting as a string.\n\
+$_gdb_maint_setting_str - returns the value of a GDB maintenance setting.\n\
 Usage: $_gdb_maint_setting_str (setting)\n\
 \n\
+Like \"$_gdb_maint_setting\", but the return value is always a string.\n\
 auto-boolean values are \"off\", \"on\", \"auto\".\n\
 boolean values are \"off\", \"on\".\n\
 Some integer settings accept an unlimited value, returned\n\

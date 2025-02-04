@@ -17,8 +17,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#ifndef BUILD_ID_H
-#define BUILD_ID_H
+#ifndef GDB_BUILD_ID_H
+#define GDB_BUILD_ID_H
 
 #include "gdb_bfd.h"
 #include "gdbsupport/rsp-low.h"
@@ -66,7 +66,8 @@ extern std::string find_separate_debug_file_by_buildid
    should be the file we were looking for but couldn't find.  */
 
 extern gdb_bfd_ref_ptr find_objfile_by_build_id
-  (const bfd_build_id *build_id, const char *expected_filename);
+  (struct program_space *pspace, const bfd_build_id *build_id,
+   const char *expected_filename);
 
 /* Return an hex-string representation of BUILD_ID.  */
 
@@ -104,4 +105,4 @@ build_id_equal (const bfd_build_id *a, const bfd_build_id *b)
   return build_id_equal (a, b->size, b->data);
 }
 
-#endif /* BUILD_ID_H */
+#endif /* GDB_BUILD_ID_H */

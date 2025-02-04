@@ -1,6 +1,6 @@
 /* This is the machine dependent code of the Visium Assembler.
 
-   Copyright (C) 2005-2024 Free Software Foundation, Inc.
+   Copyright (C) 2005-2025 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -111,9 +111,8 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
   arelent *reloc;
   bfd_reloc_code_real_type code;
 
-  reloc = XNEW (arelent);
-
-  reloc->sym_ptr_ptr = XNEW (asymbol *);
+  reloc = notes_alloc (sizeof (arelent));
+  reloc->sym_ptr_ptr = notes_alloc (sizeof (asymbol *));
   *reloc->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_addsy);
   reloc->address = fixp->fx_frag->fr_address + fixp->fx_where;
 
@@ -218,14 +217,14 @@ md_undefined_symbol (char *name ATTRIBUTE_UNUSED)
 }
 
 /* The parse options.  */
-const char *md_shortopts = "m:";
+const char md_shortopts[] = "m:";
 
-struct option md_longopts[] =
+const struct option md_longopts[] =
 {
   {NULL, no_argument, NULL, 0}
 };
 
-size_t md_longopts_size = sizeof (md_longopts);
+const size_t md_longopts_size = sizeof (md_longopts);
 
 struct visium_option_table
 {
@@ -867,7 +866,7 @@ md_atof (int type, char *litP, int *sizeP)
 static inline char *
 skip_space (char *s)
 {
-  while (*s == ' ' || *s == '\t')
+  while (is_whitespace (*s))
     ++s;
 
   return s;
@@ -1030,7 +1029,7 @@ md_assemble (char *str0)
   this_dest = 0;
 
   /* Drop leading whitespace (probably not required).  */
-  while (*str == ' ')
+  while (is_whitespace (*str))
     str++;
 
   /* Get opcode mnemonic and make sure it's in lower case.  */

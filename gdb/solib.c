@@ -525,7 +525,8 @@ solib_map_sections (solib &so)
 	    abfd = nullptr;
 
 	  if (abfd == nullptr)
-	    abfd = find_objfile_by_build_id (mapped_file_info->build_id (),
+	    abfd = find_objfile_by_build_id (current_program_space,
+					     mapped_file_info->build_id (),
 					     so.so_name.c_str ());
 
 	  if (abfd == nullptr && mismatch)
@@ -592,7 +593,7 @@ solib::clear ()
   this->abfd = nullptr;
 
   /* Our caller closed the objfile, possibly via objfile_purge_solibs.  */
-  this->symbols_loaded = 0;
+  this->symbols_loaded = false;
   this->objfile = nullptr;
 
   this->addr_low = this->addr_high = 0;
@@ -652,7 +653,7 @@ solib_read_symbols (solib &so, symfile_add_flags flags)
 	      so.objfile->addr_low = so.addr_low;
 	    }
 
-	  so.symbols_loaded = 1;
+	  so.symbols_loaded = true;
 	}
       catch (const gdb_exception_error &e)
 	{
@@ -859,18 +860,27 @@ update_solib_list (int from_tty)
 
       if (not_found == 1)
 	warning (_ ("Could not load shared library symbols for %ps.\n"
-		    "Do you need \"set solib-search-path\" "
-		    "or \"set sysroot\"?"),
+		    "Do you need \"%ps\" or \"%ps\"?"),
 		 styled_string (file_name_style.style (),
-				not_found_filename));
+				not_found_filename),
+		 styled_string (command_style.style (),
+				"set solib-search-path"),
+		 styled_string (command_style.style (), "set sysroot"));
       else if (not_found > 1)
 	warning (_ ("\
 Could not load shared library symbols for %d libraries, e.g. %ps.\n\
-Use the \"info sharedlibrary\" command to see the complete listing.\n\
-Do you need \"set solib-search-path\" or \"set sysroot\"?"),
+Use the \"%ps\" command to see the complete listing.\n\
+Do you need \"%ps\" or \"%ps\"?"),
 		 not_found,
 		 styled_string (file_name_style.style (),
-				not_found_filename));
+				not_found_filename),
+		 styled_string (command_style.style (),
+				"info sharedlibrary"),
+		 styled_string (command_style.style (),
+				"set solib-search-path"),
+		 styled_string (command_style.style (),
+				"set sysroot"));
+
     }
 }
 
@@ -1258,7 +1268,7 @@ reload_shared_libraries_1 (int from_tty)
   for (solib &so : current_program_space->solibs ())
     {
       const char *found_pathname = NULL;
-      bool was_loaded = so.symbols_loaded != 0;
+      bool was_loaded = so.symbols_loaded;
       symfile_add_flags add_flags = SYMFILE_DEFER_BP_RESET;
 
       if (from_tty)

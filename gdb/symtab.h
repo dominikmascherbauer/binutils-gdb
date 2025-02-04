@@ -17,14 +17,14 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#if !defined (SYMTAB_H)
-#define SYMTAB_H 1
+#ifndef GDB_SYMTAB_H
+#define GDB_SYMTAB_H
 
 #include <array>
 #include <vector>
 #include <string>
 #include <set>
-#include "gdbsupport/gdb_vecs.h"
+#include "dwarf2/call-site.h"
 #include "gdbtypes.h"
 #include "gdbsupport/gdb_obstack.h"
 #include "gdbsupport/gdb_regex.h"
@@ -33,7 +33,6 @@
 #include <optional>
 #include <string_view>
 #include "gdbsupport/next-iterator.h"
-#include "gdbsupport/iterator-range.h"
 #include "completer.h"
 #include "gdb-demangle.h"
 #include "split-name.h"
@@ -1947,7 +1946,7 @@ struct compunit_symtab
   symtab *primary_filetab () const;
 
   /* Set m_call_site_htab.  */
-  void set_call_site_htab (htab_up call_site_htab);
+  void set_call_site_htab (call_site_htab_t &&call_site_htab);
 
   /* Find call_site info for PC.  */
   call_site *find_call_site (CORE_ADDR pc) const;
@@ -2014,7 +2013,7 @@ struct compunit_symtab
   unsigned int m_epilogue_unwind_valid : 1;
 
   /* struct call_site entries for this compilation unit or NULL.  */
-  htab_t m_call_site_htab;
+  call_site_htab_t *m_call_site_htab;
 
   /* The macro table for this symtab.  Like the blockvector, this
      is shared between different symtabs in a given compilation unit.
@@ -2510,7 +2509,16 @@ completion_skip_symbol (complete_symbol_mode mode, Symbol *sym)
 
 bool matching_obj_sections (struct obj_section *, struct obj_section *);
 
-extern struct symtab *find_line_symtab (struct symtab *, int, int *, bool *);
+/* Find line number LINE in any symtab whose name is the same as
+   SYMTAB.
+
+   If found, return the symtab that contains the linetable in which it was
+   found, set *INDEX to the index in the linetable of the best entry
+   found.  The returned index includes inexact matches.
+
+   If not found, return NULL.  */
+
+extern symtab *find_line_symtab (symtab *sym_tab, int line, int *index);
 
 /* Given a function symbol SYM, find the symtab and line for the start
    of the function.  If FUNFIRSTLINE is true, we want the first line
@@ -3015,4 +3023,4 @@ std::optional<CORE_ADDR> find_epilogue_using_linetable (CORE_ADDR func_addr);
 extern struct symbol *search_symbol_list (const char *name, int num,
 					  struct symbol **syms);
 
-#endif /* !defined(SYMTAB_H) */
+#endif /* GDB_SYMTAB_H */

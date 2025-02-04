@@ -1,4 +1,4 @@
-/* Copyright (C) 2021-2024 Free Software Foundation, Inc.
+/* Copyright (C) 2021-2025 Free Software Foundation, Inc.
    Contributed by Oracle.
 
    This file is part of GNU Binutils.
@@ -265,9 +265,14 @@ Elf::~Elf ()
       for (int i = 0; i < (int) ehdrp->e_shnum; i++)
 	{
 	  Elf_Data *p = data[i];
-	  if (p && !mmap_on_file && (p->d_flags & SHF_SUNW_ABSENT) == 0)
-	    free (p->d_buf);
-	  delete p;
+	  if (p)
+	    {
+	      if (p->d_flags & SEC_DECOMPRESSED)
+		free (p->d_buf);
+	      else if (!mmap_on_file && (p->d_flags & SHF_SUNW_ABSENT) == 0)
+		free (p->d_buf);
+	      delete p;
+	    }
 	}
       free (data);
     }
@@ -405,7 +410,7 @@ Elf::elf_getdata (unsigned int sec)
 {
   if (data == NULL)
     {
-      data = (Elf_Data **) malloc (ehdrp->e_shnum * sizeof (Elf_Data *));
+      data = (Elf_Data **) xmalloc (ehdrp->e_shnum * sizeof (Elf_Data *));
       for (int i = 0; i < (int) ehdrp->e_shnum; i++)
 	data[i] = NULL;
     }
@@ -443,11 +448,28 @@ Elf::elf_getdata (unsigned int sec)
 		}
 	    }
 	}
-      edta->d_buf = get_data (shdr->sh_offset, (size_t) shdr->sh_size, NULL);
-      edta->d_flags = shdr->sh_flags;
-      edta->d_size = ((edta->d_buf == NULL) || (shdr->sh_type == SHT_NOBITS)) ? 0 : shdr->sh_size;
-      edta->d_off = shdr->sh_offset;
-      edta->d_align = shdr->sh_addralign;
+
+      sec_ptr sp = shdr->bfd_section;
+      if (sp && bfd_is_section_compressed (abfd, sp))
+	{
+	  bfd_byte *p = NULL;
+	  if (bfd_get_full_section_contents (abfd, sp, &p))
+	    {
+	      edta->d_buf = p;
+	      edta->d_size = p ? sp->size : 0;
+	      edta->d_off = 0;
+	      edta->d_flags = shdr->sh_flags | SEC_DECOMPRESSED;
+	      edta->d_align = shdr->sh_addralign;
+	    }
+	}
+      else
+	{
+	  edta->d_buf = get_data (shdr->sh_offset, (size_t) shdr->sh_size, NULL);
+	  edta->d_flags = shdr->sh_flags;
+	  edta->d_size = ((edta->d_buf == NULL) || (shdr->sh_type == SHT_NOBITS)) ? 0 : shdr->sh_size;
+	  edta->d_off = shdr->sh_offset;
+	  edta->d_align = shdr->sh_addralign;
+	}
     }
   return edta;
 }
@@ -744,7 +766,7 @@ Elf::get_bfd_symbols()
 	bfd_symcnt = bfd_get_symtab_upper_bound (abfd);
       if (bfd_symcnt > 0)
 	{
-	  bfd_sym = (asymbol **) malloc (bfd_symcnt);
+	  bfd_sym = (asymbol **) xmalloc (bfd_symcnt);
 	  bfd_symcnt = bfd_canonicalize_symtab (abfd, bfd_sym);
 	  if (bfd_symcnt < 0)
 	    {
@@ -761,7 +783,7 @@ Elf::get_bfd_symbols()
       bfd_dynsymcnt = bfd_get_dynamic_symtab_upper_bound (abfd);
       if (bfd_dynsymcnt > 0)
 	{
-	  bfd_dynsym = (asymbol **) malloc (bfd_dynsymcnt);
+	  bfd_dynsym = (asymbol **) xmalloc (bfd_dynsymcnt);
 	  bfd_dynsymcnt = bfd_canonicalize_dynamic_symtab (abfd, bfd_dynsym);
 	  if (bfd_dynsymcnt < 0)
 	    {

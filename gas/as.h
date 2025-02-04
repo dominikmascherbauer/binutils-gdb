@@ -1,5 +1,5 @@
 /* as.h - global header file
-   Copyright (C) 1987-2024 Free Software Foundation, Inc.
+   Copyright (C) 1987-2025 Free Software Foundation, Inc.
 
    This file is part of GAS, the GNU Assembler.
 
@@ -263,7 +263,10 @@ enum _relax_state
   rs_dwarf2dbg,
 
   /* SFrame FRE type selection optimization.  */
-  rs_sframe
+  rs_sframe,
+
+  /* CodeView compressed integer.  */
+  rs_cv_comp,
 };
 
 typedef enum _relax_state relax_stateT;
@@ -319,6 +322,9 @@ COMMON int flag_no_warnings; /* -W, --no-warn */
 
 /* True if warnings count as errors.  */
 COMMON int flag_fatal_warnings; /* --fatal-warnings */
+
+/* True if infos should be inhibited.  */
+COMMON bool flag_no_information; /* --no-info */
 
 /* True if we should attempt to generate output even if non-fatal errors
    are detected.  */

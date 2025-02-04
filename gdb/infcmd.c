@@ -27,6 +27,7 @@
 #include "gdbsupport/environ.h"
 #include "value.h"
 #include "cli/cli-cmds.h"
+#include "cli/cli-style.h"
 #include "symfile.h"
 #include "gdbcore.h"
 #include "target.h"
@@ -1999,10 +2000,9 @@ info_program_command (const char *args, int from_tty)
     }
 
   if (from_tty)
-    {
-      gdb_printf (_("Type \"info stack\" or \"info "
-		    "registers\" for more information.\n"));
-    }
+    gdb_printf (_("Type \"%ps\" or \"%ps\" for more information.\n"),
+		styled_string (command_style.style (), "info stack"),
+		styled_string (command_style.style (), "info registers"));
 }
 
 static void
@@ -2880,7 +2880,7 @@ stop_current_target_threads_ns (ptid_t ptid)
      all-stop mode, we will only get one stop event --- it's undefined
      which thread will report the event.  */
   set_stop_requested (current_inferior ()->process_target (),
-		      ptid, 1);
+		      ptid, true);
 }
 
 /* See inferior.h.  */
@@ -3282,8 +3282,10 @@ frame."));
   add_com_alias ("u", until_cmd, class_run, 1);
 
   c = add_com ("advance", class_run, advance_command, _("\
-Continue the program up to the given location (same form as args for break \
-command).\n\
+Continue the program up to the given location.\n\
+Usage: advance LOCSPEC\n\
+The argument is a location specification, i.e., the same forms\n\
+accepted by the 'break' command.\n\
 Execution will also stop upon exit from the current stack frame."));
   set_cmd_completer (c, location_completer);
 

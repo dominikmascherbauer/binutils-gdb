@@ -1,5 +1,5 @@
 /* ldlex.h -
-   Copyright (C) 1991-2024 Free Software Foundation, Inc.
+   Copyright (C) 1991-2025 Free Software Foundation, Inc.
 
    This file is part of the GNU Binutils.
 
@@ -67,6 +67,7 @@ enum option_values
   OPTION_SYMBOLIC,
   OPTION_SYMBOLIC_FUNCTIONS,
   OPTION_TASK_LINK,
+  OPTION_IMAGE_BASE,
   OPTION_TBSS,
   OPTION_TDATA,
   OPTION_TTEXT,
@@ -325,7 +326,6 @@ enum option_values
   /* Used by emultempl/pe.em, emultempl/pep.em and emultempl/beos.em.  */
   OPTION_DLL,
   OPTION_FILE_ALIGNMENT,
-  OPTION_IMAGE_BASE,
   OPTION_MAJOR_IMAGE_VERSION,
   OPTION_MAJOR_OS_VERSION,
   OPTION_MAJOR_SUBSYSTEM_VERSION,

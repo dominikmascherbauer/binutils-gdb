@@ -1,5 +1,5 @@
 /* This module handles expression trees.
-   Copyright (C) 1991-2024 Free Software Foundation, Inc.
+   Copyright (C) 1991-2025 Free Software Foundation, Inc.
    Written by Steve Chamberlain of Cygnus Support <sac@cygnus.com>.
 
    This file is part of the GNU Binutils.
@@ -1630,7 +1630,7 @@ exp_get_fill (etree_type *tree, fill_type *def, char *name)
     {
       unsigned char *dst;
       unsigned char *s;
-      fill = (fill_type *) xmalloc ((len + 1) / 2 + sizeof (*fill) - 1);
+      fill = stat_alloc ((len + 1) / 2 + sizeof (*fill) - 1);
       fill->size = (len + 1) / 2;
       dst = fill->data;
       s = (unsigned char *) expld.result.str;
@@ -1655,7 +1655,7 @@ exp_get_fill (etree_type *tree, fill_type *def, char *name)
     }
   else
     {
-      fill = (fill_type *) xmalloc (4 + sizeof (*fill) - 1);
+      fill = stat_alloc (4 + sizeof (*fill) - 1);
       val = expld.result.value;
       fill->data[0] = (val >> 24) & 0xff;
       fill->data[1] = (val >> 16) & 0xff;
@@ -1699,14 +1699,15 @@ align_n (bfd_vma value, bfd_vma align)
 }
 
 void
-ldexp_init (void)
+ldexp_init (bool object_only)
 {
   /* The value "13" is ad-hoc, somewhat related to the expected number of
      assignments in a linker script.  */
-  if (!bfd_hash_table_init_n (&definedness_table,
-			      definedness_newfunc,
-			      sizeof (struct definedness_hash_entry),
-			      13))
+  if (!object_only
+      && !bfd_hash_table_init_n (&definedness_table,
+				 definedness_newfunc,
+				 sizeof (struct definedness_hash_entry),
+				 13))
     einfo (_("%F%P: can not create hash table: %E\n"));
 }
 
@@ -1763,7 +1764,8 @@ ldexp_is_final_sym_absolute (const struct bfd_link_hash_entry *h)
 }
 
 void
-ldexp_finish (void)
+ldexp_finish (bool object_only)
 {
-  bfd_hash_table_free (&definedness_table);
+  if (!object_only)
+    bfd_hash_table_free (&definedness_table);
 }

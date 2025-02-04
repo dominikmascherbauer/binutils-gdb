@@ -1,5 +1,5 @@
 /* tc-loongarch.h -- Header file for tc-loongarch.c.
-   Copyright (C) 2021-2024 Free Software Foundation, Inc.
+   Copyright (C) 2021-2025 Free Software Foundation, Inc.
    Contributed by Loongson Ltd.
 
    This file is part of GAS.
@@ -74,12 +74,16 @@ extern bool loongarch_frag_align_code (int, int);
    relaxation, so do not resolve such expressions in the assembler.  */
 #define md_allow_local_subtract(l,r,s) 0
 
+#define TC_FORCE_RELOCATION(FIX) loongarch_force_relocation (FIX)
+extern int loongarch_force_relocation (struct fix *);
+
 /* If subsy of BFD_RELOC32/64 and PC in same segment, and without relax
    or PC at start of subsy or with relax but sub_symbol_segment not in
    SEC_CODE, we generate 32/64_PCREL.  */
 #define TC_FORCE_RELOCATION_SUB_LOCAL(FIX, SEG) \
   (!(LARCH_opts.thin_add_sub \
-     && (BFD_RELOC_32 || BFD_RELOC_64) \
+     && ((FIX)->fx_r_type == BFD_RELOC_32 \
+	 ||(FIX)->fx_r_type == BFD_RELOC_64) \
      && (!LARCH_opts.relax \
 	|| S_GET_VALUE (FIX->fx_subsy) \
 	   == FIX->fx_frag->fr_address + FIX->fx_where \
@@ -120,12 +124,14 @@ extern bool loongarch_frag_align_code (int, int);
   loongarch_cfi_frame_initial_instructions
 extern void loongarch_cfi_frame_initial_instructions (void);
 
+#define tc_parse_to_dw2regnum tc_loongarch_parse_to_dw2regnum
+extern void tc_loongarch_parse_to_dw2regnum (expressionS *);
+
+extern int tc_loongarch_regname_to_dw2regnum (char *);
+
 #define tc_symbol_new_hook(sym) \
   if (0 == strcmp (sym->bsym->name, FAKE_LABEL_NAME)) \
     S_SET_OTHER (sym, STV_HIDDEN);
-
-#define tc_parse_to_dw2regnum tc_loongarch_parse_to_dw2regnum
-extern void tc_loongarch_parse_to_dw2regnum (expressionS *);
 
 extern void loongarch_pre_output_hook (void);
 #define md_pre_output_hook loongarch_pre_output_hook ()
@@ -133,7 +139,7 @@ extern void loongarch_pre_output_hook (void);
 
 #define SUB_SEGMENT_ALIGN(SEG, FRCHAIN) 0
 
-#define HANDLE_ALIGN(fragp) loongarch_handle_align (fragp)
+#define HANDLE_ALIGN(sec, fragp) loongarch_handle_align (fragp)
 extern void loongarch_handle_align (struct frag *);
 #define MAX_MEM_FOR_RS_ALIGN_CODE (3 + 4)
 
