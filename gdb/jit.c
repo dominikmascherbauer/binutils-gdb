@@ -664,7 +664,8 @@ jit_object_close_impl (struct gdb_symbol_callbacks *cb,
 			       priv_data->entry.symfile_addr));
 
   objfile *objfile = objfile::make (nullptr, current_program_space,
-				    objfile_name.c_str (), OBJF_NOT_FILENAME);
+				    objfile_name.c_str (),
+				    OBJF_NOT_FILENAME | OBJF_JIT);
   objfile->section_offsets.push_back (0);
   objfile->sect_index_text = 0;
   objfile->per_bfd->gdbarch = priv_data->gdbarch;
@@ -801,7 +802,8 @@ JITed symbol file is not an object file, ignoring it.\n"));
   objfile = symbol_file_add_from_bfd (nbfd,
 				      bfd_get_filename (nbfd.get ()), 0,
 				      &sai,
-				      OBJF_SHARED | OBJF_NOT_FILENAME, NULL);
+				      OBJF_SHARED | OBJF_NOT_FILENAME |
+				      OBJF_JIT, NULL);
 
   add_objfile_entry (objfile, entry_addr, code_entry->symfile_addr,
 		     code_entry->symfile_size);

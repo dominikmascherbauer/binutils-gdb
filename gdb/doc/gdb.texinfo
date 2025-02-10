@@ -42255,6 +42255,32 @@ Symbol "argc" is a complex DWARF expression:
 For more information on these expressions, see
 @uref{http://www.dwarfstd.org/, the DWARF standard}.
 
+@kindex maint set dwarf type-signature-fallback
+@kindex maint show dwarf type-signature-fallback
+@item maint set dwarf type-signature-fallback @samp{full|main|off}
+@itemx maint show dwarf type-signature-fallback
+Control the behavior of the type signature lookup for type units if a
+type signature is undefined within an objfile.
+
+The default is @code{off}, which means @value{GDBN} will not use other
+objfiles in the progspace to lookup missing type signatures. When
+@code{main}, @value{GDBN} will check the current main objfile for a
+missing signatured type. When @code{full}, all objfiles in the current
+progspace will be searched for the missing signatured type.
+
+@kindex maint set dwarf type-signature-fallback-jit
+@kindex maint show dwarf type-signature-fallback-jit
+@item maint set dwarf type-signature-fallback-jit
+@itemx maint show dwarf type-signature-fallback-jit
+
+Control whether @code{dwarf type-signature-fallback} is limited to
+objfiles originated from the JIT interface (@pxref{JIT Interface})
+or all objfiles with a missing signatured type.
+
+The default is @code{on}, which limits the type signature fallback to
+only objfiles from the JIT interface. When @code{off}, the type signature
+fallback will look for missing signatured types for all objfiles.
+
 @kindex maint set dwarf max-cache-age
 @kindex maint show dwarf max-cache-age
 @item maint set dwarf max-cache-age
