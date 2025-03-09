@@ -2668,12 +2668,12 @@ fill_in_sig_entry_from_dwo_entry (dwarf2_per_objfile *per_objfile,
    to read all the DWOs to build the type unit groups.  */
 
 static struct signatured_type *
-lookup_dwo_signatured_type (struct dwarf2_cu *cu, ULONGEST sig)
+lookup_dwo_signatured_type (struct dwo_unit *dwo_unit, ULONGEST sig,
+			    struct dwarf2_per_objfile *per_objfile)
 {
-  dwarf2_per_objfile *per_objfile = cu->per_objfile;
   dwarf2_per_bfd *per_bfd = per_objfile->per_bfd;
 
-  gdb_assert (cu->dwo_unit);
+  gdb_assert (dwo_unit);
 
   /* We only ever need to read in one copy of a signatured type.
      Use the global signatured_types array to do our own comdat-folding
@@ -2696,14 +2696,14 @@ lookup_dwo_signatured_type (struct dwarf2_cu *cu, ULONGEST sig)
       && (*sig_type_it)->tu_read)
     return *sig_type_it;
 
-  /* Note: cu->dwo_unit is the dwo_unit that references this TU, not the
+  /* Note: dwo_unit is the dwo_unit that references this TU, not the
      dwo_unit of the TU itself.  */
-  dwo_file *dwo_file = cu->dwo_unit->dwo_file;
+  dwo_file *dwo_file = dwo_unit->dwo_file;
   auto it = dwo_file->tus.find (sig);
   if (it == dwo_file->tus.end ())
     return nullptr;
 
-  dwo_unit *dwo_entry = *it;
+  struct dwo_unit *dwo_entry = *it;
 
   /* If the global table doesn't have an entry for this TU, add one.  */
   if (sig_type_it == per_bfd->signatured_types.end ())
@@ -2723,13 +2723,12 @@ lookup_dwo_signatured_type (struct dwarf2_cu *cu, ULONGEST sig)
    it won't be in .gdb_index.  */
 
 static struct signatured_type *
-lookup_dwp_signatured_type (struct dwarf2_cu *cu, ULONGEST sig)
+lookup_dwp_signatured_type (ULONGEST sig,
+			    struct dwarf2_per_objfile *per_objfile)
 {
-  dwarf2_per_objfile *per_objfile = cu->per_objfile;
   dwarf2_per_bfd *per_bfd = per_objfile->per_bfd;
   struct dwp_file *dwp_file = get_dwp_file (per_objfile);
 
-  gdb_assert (cu->dwo_unit);
   gdb_assert (dwp_file != NULL);
 
   auto sig_type_it = per_bfd->signatured_types.find (sig);
@@ -2755,34 +2754,133 @@ lookup_dwp_signatured_type (struct dwarf2_cu *cu, ULONGEST sig)
   return *sig_type_it;
 }
 
-/* Lookup a signature based type for DW_FORM_ref_sig8.
-   Returns NULL if signature SIG is not present in the table.
-   It is up to the caller to complain about this.  */
+/* Subroutine of lookup_signatured_type.
+   Look up the type for signature SIG, from a fallback objfile.
+   If we don't have a DWO/DWP file or can't find the signature there, check the
+   fallback object file.
+   If a signatured type was found, PER_OBJFILE will contain its per_objfile.  */
 
 static struct signatured_type *
-lookup_signatured_type (struct dwarf2_cu *cu, ULONGEST sig)
+lookup_fallback_signatured_type (struct objfile *fallback_objfile, ULONGEST sig,
+				 struct dwarf2_per_objfile **per_objfile)
 {
-  dwarf2_per_objfile *per_objfile = cu->per_objfile;
-  dwarf2_per_bfd *per_bfd = per_objfile->per_bfd;
+  struct signatured_type *sig_type = nullptr;
+
+  /* If we have a separate debug objfile, use it for the fallback.  */
+  if (fallback_objfile->separate_debug_objfile != nullptr)
+    fallback_objfile = fallback_objfile->separate_debug_objfile;
+
+  struct dwarf2_per_objfile *fallback_per_objfile = get_dwarf2_per_objfile
+	  (fallback_objfile);
+
+  /* The fallback objfile must be different to the current objfile. Otherwise,
+     this is no fallback so all necessary checks were already performed in
+     lookup_signatured_type.  */
+  if (fallback_per_objfile == *per_objfile)
+    return nullptr;
+
+  /* Do we have a dwp file?  */
+  if (get_dwp_file (fallback_per_objfile) != nullptr)
+    {
+      sig_type = lookup_dwp_signatured_type (sig, fallback_per_objfile);
+    }
+    /* Do we have dwo files?  */
+  else
+    {
+      /* Look for dwo_entry that contains the signatured type.  */
+      for (const dwo_file_up &file : fallback_per_objfile->per_bfd->dwo_files)
+        {
+	  auto it = file->tus.find (sig);
+	  if (it != file->tus.end ())
+	    {
+	      /* We found the dwo entry. Check for the signatured type.  */
+	      sig_type = lookup_dwo_signatured_type (*it, sig,
+						   fallback_per_objfile);
+	      break;
+	    }
+        }
+    }
+
+  /* Do we still need to check the fallback per_objfile or was the signatured
+     type found in a DWO/DWP file?  */
+  if (sig_type == nullptr)
+    {
+      auto sig_type_it
+        = fallback_per_objfile->per_bfd->signatured_types.find (sig);
+
+      if (sig_type_it != fallback_per_objfile->per_bfd->signatured_types.end ())
+	sig_type = *sig_type_it;
+    }
+
+  if (sig_type != nullptr)
+    /* Ensure we will know where the signature type came from.  */
+    *per_objfile = fallback_per_objfile;
+  return sig_type;
+}
+
+/* Lookup a signature based type for DW_FORM_ref_sig8.
+   Returns NULL if signature SIG is not present in the table.
+   It is up to the caller to complain about this.
+   If type_signature_fallback is enabled and the signatured type is found,
+   per_objfile is the objfile where the signatured type was found in. */
+
+static struct signatured_type *
+lookup_signatured_type (struct dwarf2_cu *cu, ULONGEST sig,
+			struct dwarf2_per_objfile **per_objfile)
+{
+  struct signatured_type *sig_type = nullptr;
+  dwarf2_per_bfd *per_bfd = (*per_objfile)->per_bfd;
 
   if (cu->dwo_unit)
     {
       /* We're in a DWO/DWP file, and we're using .gdb_index.
-	 These cases require special processing.  */
-      if (get_dwp_file (per_objfile) == NULL)
-	return lookup_dwo_signatured_type (cu, sig);
+     These cases require special processing.  */
+      if (get_dwp_file (*per_objfile) == nullptr)
+	sig_type = lookup_dwo_signatured_type (cu->dwo_unit, sig, *per_objfile);
       else
-	return lookup_dwp_signatured_type (cu, sig);
+	sig_type = lookup_dwp_signatured_type (sig, *per_objfile);
+
+      /* If we already found the signatured type, return it.  */
+      if (sig_type != nullptr)
+	return sig_type;
     }
   else
     {
+      /* Lookup type signature in the current objfile.  */
       auto sig_type_it = per_bfd->signatured_types.find (sig);
 
+      /* If we already found the signatured type, return it.  */
       if (sig_type_it != per_bfd->signatured_types.end ())
 	return *sig_type_it;
-
-      return nullptr;
     }
+
+  /* Handle fallback if type signature lookup fallback is enabled for this
+     objfile.  */
+  if (use_type_signature_fallback ((*per_objfile)->objfile))
+    {
+      /* Do a full fallback through all objfiles in the progspace.  */
+      if (type_signature_fallback == type_signature_fallback_full)
+	{
+	  for (objfile *objfile: (*per_objfile)->objfile->pspace ()->objfiles ())
+	    {
+	      sig_type = lookup_fallback_signatured_type (objfile, sig,
+							  per_objfile);
+	      /* If we already found the signatured type, return it.  */
+	      if (sig_type != nullptr)
+		return sig_type;
+	    }
+	}
+      else
+	{
+	  /* fallback to main symfile objfile.  */
+	  struct objfile *objfile
+	    = (*per_objfile)->objfile->pspace ()->symfile_object_file;
+	  return lookup_fallback_signatured_type (objfile, sig, per_objfile);
+	}
+    }
+
+  /* We could not find the signatured type.  */
+  return nullptr;
 }
 
 /* Low level DIE reading support.  */
@@ -4332,8 +4430,19 @@ maybe_queue_comp_unit (struct dwarf2_cu *dependent_cu, dwarf2_per_cu *per_cu,
   bool queued = false;
   if (!per_objfile->symtab_set_p (per_cu))
     {
-      /* Add it to the queue.  */
-      queue_comp_unit (per_cu, per_objfile, pretend_language);
+      if (dependent_cu != nullptr && !per_objfile->queue.has_value () &&
+	  type_signature_fallback != type_signature_fallback_off)
+	{
+	  /* If the signatured type in the fallback objfile references another
+	     signatured type we might end up here with no queue in the fallback
+	     objfile.  */
+	  dw2_instantiate_symtab (per_cu, per_objfile, false);
+	}
+      else
+	{
+	  /* Add it to the queue.  */
+	  queue_comp_unit (per_cu, per_objfile, pretend_language);
+	}
       queued = true;
 
       dwarf_read_debug_printf ("Queuing CU for expansion: "
@@ -8382,7 +8491,7 @@ static int
 queue_and_load_dwo_tu (dwo_unit *dwo_unit, dwarf2_cu *cu)
 {
   ULONGEST signature = dwo_unit->signature;
-  signatured_type *sig_type = lookup_dwo_signatured_type (cu, signature);
+  signatured_type *sig_type = lookup_dwo_signatured_type (cu->dwo_unit, signature, cu->per_objfile);
 
   if (sig_type != NULL)
     {
@@ -18984,6 +19093,7 @@ dwarf2_get_die_type (cu_offset die_offset, dwarf2_per_cu *per_cu,
 
 static struct die_info *
 follow_die_sig_1 (struct die_info *src_die, struct signatured_type *sig_type,
+		  struct dwarf2_per_objfile *sig_type_per_objfile,
 		  struct dwarf2_cu **ref_cu)
 {
   struct dwarf2_cu *sig_cu;
@@ -18999,12 +19109,14 @@ follow_die_sig_1 (struct die_info *src_die, struct signatured_type *sig_type,
      Even if maybe_queue_comp_unit doesn't require us to load the CU's DIEs,
      it doesn't mean they are currently loaded.  Since we require them
      to be loaded, we must check for ourselves.  */
-  if (maybe_queue_comp_unit (*ref_cu, sig_type, per_objfile,
+  if (maybe_queue_comp_unit (*ref_cu, sig_type, sig_type_per_objfile,
 			     language_minimal)
-      || per_objfile->get_cu (sig_type) == nullptr)
-    read_signatured_type (sig_type, per_objfile);
+      || sig_type_per_objfile->get_cu (sig_type) == nullptr)
+    {
+      read_signatured_type (sig_type, sig_type_per_objfile);
+    }
 
-  sig_cu = per_objfile->get_cu (sig_type);
+  sig_cu = sig_type_per_objfile->get_cu (sig_type);
   gdb_assert (sig_cu != NULL);
   gdb_assert (to_underlying (sig_type->type_offset_in_section) != 0);
 
@@ -19040,7 +19152,8 @@ follow_die_sig (struct die_info *src_die, const struct attribute *attr,
 
   gdb_assert (attr->form == DW_FORM_ref_sig8);
 
-  sig_type = lookup_signatured_type (*ref_cu, signature);
+  dwarf2_per_objfile *sig_type_per_objfile = (*ref_cu)->per_objfile;
+  sig_type = lookup_signatured_type (*ref_cu, signature, &sig_type_per_objfile);
   /* sig_type will be NULL if the signatured type is missing from
      the debug info.  */
   if (sig_type == NULL)
@@ -19052,7 +19165,7 @@ follow_die_sig (struct die_info *src_die, const struct attribute *attr,
 	     objfile_name ((*ref_cu)->per_objfile->objfile));
     }
 
-  die = follow_die_sig_1 (src_die, sig_type, ref_cu);
+  die = follow_die_sig_1 (src_die, sig_type, sig_type_per_objfile, ref_cu);
   if (die == NULL)
     {
       src_die->error_dump ();
@@ -19079,7 +19192,8 @@ get_signatured_type (struct die_info *die, ULONGEST signature,
   struct die_info *type_die;
   struct type *type;
 
-  sig_type = lookup_signatured_type (cu, signature);
+  dwarf2_per_objfile *sig_type_per_objfile = per_objfile;
+  sig_type = lookup_signatured_type (cu, signature, &sig_type_per_objfile);
   /* sig_type will be NULL if the signatured type is missing from
      the debug info.  */
   if (sig_type == NULL)
@@ -19098,7 +19212,7 @@ get_signatured_type (struct die_info *die, ULONGEST signature,
     return type;
 
   type_cu = cu;
-  type_die = follow_die_sig_1 (die, sig_type, &type_cu);
+  type_die = follow_die_sig_1 (die, sig_type, sig_type_per_objfile, &type_cu);
   if (type_die != NULL)
     {
       /* N.B. We need to call get_die_type to ensure only one type for this DIE
@@ -19125,6 +19239,18 @@ get_signatured_type (struct die_info *die, ULONGEST signature,
       type = build_error_marker_type (cu, die);
     }
 
+  if (type_signature_fallback != type_signature_fallback_off)
+    {
+      /* We might already have read the required signatured type
+         after looking for it in a fallback objfile  */
+      struct type *existing_type = per_objfile->get_type_for_signatured_type
+	      (sig_type);
+      if (existing_type != nullptr)
+	{
+	  gdb_assert (type == existing_type);
+	  return type;
+	}
+    }
   per_objfile->set_type_for_signatured_type (sig_type, type);
 
   return type;
