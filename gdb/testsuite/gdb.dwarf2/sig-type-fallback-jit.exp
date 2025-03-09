@@ -1,0 +1,75 @@
+# Copyright 2024 Free Software Foundation, Inc.
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+load_lib dwarf.exp
+
+require dwarf2_support allow_shlib_tests
+
+set lib_address 0x7000000
+set lib_name libfoo.so
+
+standard_testfile .c .S -lib.S
+
+# Create fake DWARF TU for the main objfile.
+set asm_file [standard_output_file $srcfile2]
+Dwarf::assemble ${asm_file} {
+    tu {version 5} 0x1122334455667788 the_type {
+ 	type_unit {} {
+   	    the_type: base_type {
+   		{name myType}
+   		{encoding @DW_ATE_signed}
+   		{byte_size 4 sdata}
+   	    }
+   	}
+   	}
+}
+
+# Create fake DWARF CU with type reference for the jit object file.
+set asm_file_lib [standard_output_file $srcfile3]
+Dwarf::assemble ${asm_file_lib} {
+    cu {} {
+  	compile_unit {} {
+   	    declare_labels typedef_label
+
+   	    typedef_label: typedef {
+   		{name bar}
+   		{type 0x1122334455667788 ref_sig8 }
+   	    }
+   	}
+    }
+}
+
+
+set libobj [standard_output_file $lib_name]
+if {[build_executable "build shared library" $libobj $asm_file_lib \
+	 [list debug text_segment=$lib_address shlib]] != 0} {
+    return -1
+}
+
+if {[prepare_for_testing "failed to prepare" $testfile [list $srcfile $asm_file] \
+	 [list debug additional_flags=-DLIB_ADDRESS=$lib_address \
+	 additional_flags=-DLIB_NAME_STRING=\"$libobj\" ]]} {
+    return -1
+}
+
+if {![runto_main]} {
+    return -1
+}
+
+gdb_test_no_output "set dwarf-type-signature-fallback main"
+gdb_breakpoint [gdb_get_line_number "breakpoint 1"]
+gdb_continue_to_breakpoint "first breakpoint"
+gdb_test "ptype bar" "type = myType"
