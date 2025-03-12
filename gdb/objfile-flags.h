@@ -56,6 +56,9 @@ enum objfile_flag : unsigned
     /* User requested that we do not read this objfile's symbolic
        information.  */
     OBJF_READNEVER = 1 << 6,
+
+    /* Set if this objfile originates from a JIT compilation  */
+    OBJF_JIT = 1 << 7,
   };
 
 DEF_ENUM_FLAGS_TYPE (enum objfile_flag, objfile_flags);
