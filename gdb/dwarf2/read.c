@@ -737,6 +737,50 @@ show_dwarf_max_cache_age (struct ui_file *file, int from_tty,
 	      value);
 }
 
+/* If the type for a type signature is not found in the CUs objfile
+   fallback to other objfiles for type signature look up */
+const char type_signature_fallback_off[] = "off";
+const char type_signature_fallback_main[] = "main";
+const char type_signature_fallback_full[] = "full";
+static const char *type_signature_fallback_enums[] =
+	{
+		type_signature_fallback_off,
+		type_signature_fallback_main,
+		type_signature_fallback_full,
+		nullptr
+	};
+static const char *type_signature_fallback = type_signature_fallback_off;
+
+static void
+show_type_signature_fallback (struct ui_file *file, int from_tty,
+			      struct cmd_list_element *c, const char *value)
+{
+  gdb_printf (file, _ ("Look up of type signatures with "
+		       "other DWARF objfiles as fallback is %s.\n"),
+	      value);
+}
+
+/* Type signature fallback is by default restricted to only jit objfiles.  */
+static bool type_signature_fallback_jit = true;
+
+static void
+show_type_signature_fallback_jit (struct ui_file *file, int from_tty,
+				  struct cmd_list_element *c, const char *value)
+{
+  gdb_printf (file, _ ("Whether type signature look up with other"
+		       "DWARF objfiles as fallback is restricted to"
+		       "objfiles loaded through the JIT interface is %s.\n"),
+	      value);
+}
+
+/* Check if type signature fallback applies to OBJFILE.  */
+static bool
+use_type_signature_fallback (struct objfile *objfile)
+{
+  return type_signature_fallback != type_signature_fallback_off &&
+	 (!type_signature_fallback_jit || objfile->flags & OBJF_JIT);
+}
+
 /* When true, wait for DWARF reading to be complete.  */
 static bool dwarf_synchronous = false;
 
@@ -20102,6 +20146,33 @@ caching, which can slow down startup."),
 			    show_dwarf_max_cache_age,
 			    &set_dwarf_cmdlist,
 			    &show_dwarf_cmdlist);
+
+  add_setshow_enum_cmd ("dwarf-type-signature-fallback", class_support,
+			type_signature_fallback_enums, &type_signature_fallback,
+			_ ("\
+Set look up of type signatures with other DWARF objfiles as fallback."), _ ("\
+Show look up of type signatures with other DWARF objfiles as fallback."), _ ("\
+This option will only take effect if set before loading symbols.\n\
+main == use the main symbolfile as fallback objfile\n\
+	for type signature look up.\n\
+full == use all DWARF objfiles with type units in the current progspace\n\
+	as fallback objfiles for type signature look up.\n\
+off  == turn type signature fallback off."),
+			NULL, show_type_signature_fallback, &setlist,
+			&showlist);
+
+  add_setshow_boolean_cmd ("dwarf-type-signature-fallback-jit", class_support,
+			&type_signature_fallback_jit,
+			_ ("\
+Set whether look up of type signatures with other DWARF objfiles as fallback\n\
+is restricted to objfiles loaded through the JIT interface."), _ ("\
+Show whether look up of type signatures with other DWARF objfiles as fallback\n\
+is restricted to objfiles loaded through the JIT interface."), _ ("\
+By default, type signature look up with other DWARF objfiles as fallback is\n\
+restricted to objfiles loaded through the JIT interface.\n\
+This option will only take effect if type-signature-fallback is enabled."),
+			NULL, show_type_signature_fallback_jit, &setlist,
+			&showlist);
 
   add_setshow_boolean_cmd ("synchronous", class_obscure,
 			    &dwarf_synchronous, _("\

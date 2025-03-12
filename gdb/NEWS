@@ -261,6 +261,27 @@ disable missing-objfile-handler LOCUS HANDLER
   or can be a regular expression which is matched against the filename
   of the primary executable in each program space.
 
+set dwarf-type-signature-fallback (off|main|full)
+  New command which enables a type signature look up fallback for DWARF objfiles.
+  If type signatures in DWARF objfile are unique, enabling this option allows
+  to look up type signatures from fallback DWARF objfiles.  Reusing type units
+  from fallback objfiles can be used to avoid duplicating those type units.
+
+  The 'main' setting allows limiting the scope of the lookup to just the main
+  symfile objfile to reduce the overhead of type signature lookup.  The 'full'
+  setting uses all objfiles in a progspace to find as many type signatures as
+  possible.
+  The default value is 'off'.
+
+set dwarf-type-signature-fallback-jit on|off
+  New command that is used in combination with dwarf-type-signature-fallback
+  and is on by default.  If type signature fallback is enabled,
+  this restricts the fallback to objfiles that were loaded with the
+  JIT debug interface.
+  JIT objfiles are produced at run-time and often rely on already available
+  type information.  This allows the debug info producer to skip generating type
+  units that are known to be present in other objfiles.
+
 * Changed commands
 
 remove-symbol-file
